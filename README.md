@@ -1,5 +1,9 @@
 # ColdTrace
 
+**New here? Read `docs/QUICKSTART.md` first** — product story, 3-command
+setup, console tour, demo cheat sheet, and the reading order for every other
+doc. This README is the technical reference underneath it.
+
 Cold-chain IoT monitoring POC for the MongoDB + Datadog hackathon.
 Virtual freezer fleet -> MQTT -> Go gateway -> MongoDB Time Series,
 observed end-to-end in **Datadog** (APM traces, metrics, logs, anomaly

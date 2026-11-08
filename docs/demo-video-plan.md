@@ -42,6 +42,11 @@ you run the `curl` inject commands, so viewers SEE the action → reaction.
 
 ## 2. Pre-record checklist (T-30 min)
 
+**Learn the product first (if you haven't):** `docs/QUICKSTART.md` §1–§6 —
+the 60-second pitch, the console tour table, the demo cheat sheet and the 5
+key concepts. That page plus this plan is everything you need on camera;
+`solution-design.md` is the deep reference if a judge drills in.
+
 Run in order; every line is verified by `scripts/demo_preflight.sh`.
 
 ```bash
@@ -253,7 +258,32 @@ auto-resolve needs another ~2–3 min. Never make the viewer watch that.
 
 ---
 
-## 7. Record-of-truth: numbers to quote (measured this rehearsal)
+## 7. Shooting order — record sequence ≠ scene order (one 40-min session)
+
+Detection waits and window warm-ups make naive scene-order recording waste
+hours. Record in this sequence instead, then cut into scene order:
+
+| Step | Record (wall clock) | Becomes scene |
+|---|---|---|
+| 1 (T+0) | `demo_cleanup.sh` → `demo_preflight.sh` on camera (12/12 green) — then **start the 7-min warm-up timer and record Scene 1 + Scene 2 narration** | 1, 2 |
+| 2 (T+7) | Inject `power_outage` FZ-006 → **immediately record the AI-Control / guardrails walkthrough** while it warms | 6 (guardrails half) |
+| 3 (T+11) | FZ-006 opens → record the incident card, topFactors, **Explain → RCA**, similar-incidents, PROPOSED reason | 3, 4 |
+| 4 (T+15) | Inject `compressor_failure` FZ-002 (class already approved) → record the fleet grid AT_RISK/ALARM transition narration | 2 (transition), 5 setup |
+| 5 (T+19) | AUTO card appears → record decision/gates → **Commands: QUEUED→SENT→ACKED ~12 ms** → tile recovers | 5 |
+| 6 (T+24) | **Keep rolling through the auto-resolve** (2–3 min — speed-ramp it later) → `system:recovery` flips the card → feedback → `learned: true` | 5 (the close of the loop) |
+| 7 (T+27) | Inject FZ-004 **and** FZ-005 → record the Events/Compliance walkthrough while they warm | 8 |
+| 8 (T+31) | Both open → record FZ-004 AUTO vs FZ-005 **HOLD latched** (+ one beat showing FZ-005 still HOLD after FZ-004 resolves) | 6 |
+| 9 (T+35) | From an incident card → **Open trace in Datadog** → span chain + log correlation by trace_id | 7 |
+| 10 (T+38) | Compliance page → CSV export (seeded FZ-009 row) → Model Health (100%, 1,100 windows) → outro narration | 8, 9 |
+| 11 (T+40) | `demo_cleanup.sh` + `demo_preflight.sh` again if you need pickup takes — **but re-wait 7 min before any new inject** | pickups |
+
+Why this order works: every inject happens with warm windows; every wait is
+filled with a scene that needs no live fault; the auto-resolve (longest real
+wait) records last so a failure there doesn't sink earlier scenes.
+
+---
+
+## 8. Record-of-truth: numbers to quote (measured this rehearsal)
 
 - Detection: **148–229 s** warm windows, **387 s** from a cold window
 - Confidence at detection: **0.93–1.00**
