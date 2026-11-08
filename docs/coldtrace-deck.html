@@ -334,7 +334,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
       <div class="card">
         <div class="t">Kết quả</div>
-        <div class="l"><span class="green mono">38 ms</span> ACK lệnh sửa · <span class="green mono">2–4 phút</span> từ inject tới incident · <span class="green mono">~3 phút</span> tự đóng incident · <span class="green mono">0</span> false positive trên fleet khỏe</div>
+        <div class="l"><span class="green mono">38 ms</span> ACK lệnh sửa · <span class="green mono">2–4 phút</span> từ inject tới incident · <span class="green mono">~3 phút</span> tự đóng incident · <span class="green mono">không báo động giả</span> trên suốt 12 tủ đang khỏe</div>
       </div>
     </div>
   </div>
@@ -434,7 +434,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="card">
         <div class="t red">① Nhiễu cảm biến giả vờ là sự cố</div>
         <div class="l"><code>$derivative</code> trên mẫu thô khuếch đại nhiễu ±0.05 °C → <strong>~20% mẫu khỏe mạnh</strong> vượt ngưỡng AT_RISK; có lúc báo <strong>4/12</strong> thiết bị "at risk" đồng thời.</div>
-        <div class="l green" style="margin-top:.4em">→ Endpoint differencing <code>$last − $first</code> cửa sổ 5 phút. <strong>12/12 OK, 0 false positive.</strong></div>
+        <div class="l green" style="margin-top:.4em">→ Endpoint differencing <code>$last − $first</code> cửa sổ 5 phút. <strong>Cả 12 tủ khỏe báo OK — không một ca báo động giả nào.</strong></div>
       </div>
       <div class="card">
         <div class="t amber">② Monitor kẹt Alert vĩnh viễn</div>
@@ -544,7 +544,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="stat"><div class="v green">0–38 ms</div><div class="n">ACK lệnh sửa<br>lệnh → thiết bị nhận</div></div>
       <div class="stat"><div class="v green">91–373s</div><div class="n">incident → tự resolve<br>sau khi sửa</div></div>
       <div class="stat"><div class="v green">0.90–1.00</div><div class="n">confidence khi phát hiện<br>gate: 0.85</div></div>
-      <div class="stat"><div class="v good">0/12</div><div class="n">false positive trên<br>fleet khỏe mạnh</div></div>
+      <div class="stat"><div class="v good">0</div><div class="n">ca báo động giả<br>trên 12 tủ khỏe</div></div>
       <div class="stat"><div class="v blue">226×</div><div class="n">nén rollup hourly<br>(7.681× daily)</div></div>
     </div>
     <div class="cols c2" style="margin-top:.5em">
