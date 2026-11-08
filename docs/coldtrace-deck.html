@@ -325,7 +325,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="card"><div class="t green">① PHÁT HIỆN</div><div class="l">Slope nhiệt qua <code>$setWindowFields</code> · +0.10 °C/min = AT_RISK · dự báo ETA tới ngưỡng</div></div>
       <div class="card"><div class="t blue">② ĐIỀU TRA</div><div class="l">Trace deep-link từ incident · RCA bằng LLM trên dữ liệu thật · incident memory tìm case tương tự</div></div>
       <div class="card"><div class="t amber">③ XỬ LÝ</div><div class="l">Policy gate (conf, ETA, cooldown, circuit breaker) → lệnh MQTT → ACK → xác nhận hồi phục · <strong>thiết bị từ chối thì retry rồi escalate lên on-call</strong></div></div>
-      <div class="card"><div class="t purple">④ HỌC</div><div class="l">60s khỏe mạnh → tự resolve · feedback của operator huấn luyện lại classifier</div></div>
+      <div class="card"><div class="t purple">④ HỌC</div><div class="l">Không ai bấm gì: <strong>60 giây telemetry khỏe</strong> là agent tự đóng incident, rồi lấy chính episode đó làm mẫu huấn luyện lại classifier</div></div>
     </div>
     <div class="cols c23" style="margin-top:.2em">
       <div class="card hl">
