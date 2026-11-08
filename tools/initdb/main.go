@@ -207,7 +207,30 @@ func main() {
 	}); err != nil {
 		log.Fatalf("device_state index: %v", err)
 	}
-	fmt.Println("created: device_state (twin, unique deviceId)")
+	// Seed each twin's desired state from the registry. Ingest owns the twin
+	// but writes `reported` only, so without this a brand-new device has no
+	// `desired.setpoint` and the operator-setpoint AT_RISK branch has nothing
+	// to compare against. The pipeline keeps an existing override intact and
+	// upserts the twin doc if ingest has not created it yet.
+	var registry []struct {
+		DeviceID string  `bson:"deviceId"`
+		Setpoint float64 `bson:"setpoint"`
+	}
+	if cur, rerr := db.Collection("devices").Find(ctx, bson.D{}); rerr == nil {
+		_ = cur.All(ctx, &registry)
+		_ = cur.Close(ctx)
+	}
+	for _, d := range registry {
+		_, _ = db.Collection("device_state").UpdateOne(ctx,
+			bson.M{"deviceId": d.DeviceID},
+			mongo.Pipeline{bson.D{{Key: "$set", Value: bson.D{
+				{Key: "desired", Value: bson.D{{Key: "$ifNull", Value: bson.A{
+					"$desired", bson.D{{Key: "setpoint", Value: d.Setpoint}},
+				}}}},
+			}}}},
+			options.UpdateOne().SetUpsert(true))
+	}
+	fmt.Println("created: device_state (twin, unique deviceId, desired seeded from registry)")
 
 	// 4) commands lifecycle
 	if err := create("commands"); err != nil {
@@ -274,7 +297,7 @@ func main() {
 	if nPolicy == 0 {
 		_, _ = db.Collection("ai_policy").InsertOne(ctx, bson.M{
 			"minConfidence":       0.85,
-			"maxEtaAlarmMinutes":  10.0,
+			"maxEtaAlarmMinutes":  45.0,
 			"autoCooldownMinutes": 30,
 			"fleetCircuitBreaker": 2,
 			"killSwitch":          false,

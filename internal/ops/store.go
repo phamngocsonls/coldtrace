@@ -74,6 +74,16 @@ const (
 // true for a healthy box resting at -17.9 against a -18 setpoint.
 const atRiskBandC = 0.2
 
+// atRiskWarmBandC is how far above setpoint a cabinet may drift before it is
+// AT_RISK regardless of whether the compressor is running. A healthy
+// thermostat never leaves ±0.08 °C; +2 °C means the box is losing the fight
+// (failed compressor, wedged door, blocked condenser) even if the controller
+// is still calling for cooling. Without this, a cabinet warming through
+// -14.4 °C with the compressor running showed green until it crossed the
+// fixed -14 °C line — the dashboard missed the exact failure the gateway's
+// slope view was already flagging.
+const atRiskWarmBandC = 2.0
+
 // statusExpr is the shared OK/AT_RISK/ALARM/STALE switch expression (also
 // reused by the series endpoint). Order matters: STALE first, then ALARM.
 func statusExpr(now time.Time) bson.D {
@@ -99,30 +109,41 @@ func statusExpr(now time.Time) bson.D {
 		ifNull("$reported.tempC", -99), -10,
 	), StatusAlarm)
 
-	// AT_RISK = temp above the at-risk band OR (compressor off while the box
-	// is meaningfully above its setpoint, i.e. cooling should be running but
-	// is not).
+	// AT_RISK = temp above the at-risk band, OR meaningfully above its
+	// setpoint (whether or not the compressor is running), OR compressor off
+	// while above the tight deadband.
 	//
-	// Two things matter here:
+	// Three things matter here:
 	//   - The setpoint lives at `desired.setpoint` on the twin, not at the top
 	//     level. Comparing against a non-existent `$setpoint` silently fell
 	//     back to a default, so every freezer resting at -17.9 counted as
 	//     "above setpoint".
-	//   - The comparison needs a deadband. A thermostat holds the cabinet
+	//   - The comparisons need deadbands. A thermostat holds the cabinet
 	//     within roughly ±0.2 °C, so `tempC > setpoint` is true for a
-	//     perfectly healthy box sitting at -17.9 against a -18 setpoint. Only
-	//     a box more than atRiskBandC above setpoint with the compressor off
-	//     is genuinely not cooling when it should be.
+	//     perfectly healthy box sitting at -17.9 against a -18 setpoint.
+	//   - A running compressor is not a clean bill of health: if the cabinet
+	//     is more than +2 °C above setpoint it is losing ground anyway, and
+	//     the fleet must show AT_RISK like the gateway health view does.
 	//
-	// Missing desired state is treated as unknown, which keeps the box OK — a
-	// reporting gap must not invent a fault.
+	// The setpoint lives at `desired.setpoint` (operator override). The
+	// registry's top-level `setpoint` is the configured default and must be
+	// the fallback: ingest owns the twin and writes `reported` only, so a
+	// device nobody has re-set has no `desired` subdocument at all. Without
+	// this fallback the comparison ran against 99 and the branch was dead —
+	// the fleet stayed green while a failed compressor warmed the cabinet
+	// (only the gateway's slope view caught it).
+	setpoint := bson.D{{Key: "$ifNull", Value: bson.A{"$desired.setpoint", "$setpoint", 99}}}
+	warm := func(band float64) bson.D {
+		return gt("$reported.tempC", bson.D{{Key: "$add", Value: bson.A{setpoint, band}}})
+	}
+	// Missing setpoint everywhere is treated as unknown, which keeps the box
+	// OK — a reporting gap must not invent a fault.
 	atRiskCase := branch(or(
 		gt(ifNull("$reported.tempC", -99), -14),
+		warm(atRiskWarmBandC),
 		and(
 			eq(ifNull("$reported.compressorRunning", true), false),
-			gt("$reported.tempC", bson.D{{Key: "$add", Value: bson.A{
-				ifNull("$desired.setpoint", 99), atRiskBandC,
-			}}}),
+			warm(atRiskBandC),
 		),
 	), StatusAtRisk)
 
@@ -153,9 +174,13 @@ func (s *Store) Fleet(ctx context.Context) ([]DeviceRow, error) {
 			}}}},
 			// Desired setpoint, needed by the AT_RISK rule: "compressor off
 			// while the box is above setpoint" must compare against the real
-			// commanded setpoint, not a hard-coded default.
+			// commanded setpoint, not a hard-coded default. Fall back to the
+			// registry setpoint so the twin view (and the API payload the
+			// console renders) is complete even before ingest/initdb seeds
+			// `desired` on a brand-new device.
 			{Key: "desired", Value: bson.D{{Key: "$ifNull", Value: bson.A{
-				bson.D{{Key: "$arrayElemAt", Value: bson.A{"$state.desired", 0}}}, bson.M{},
+				bson.D{{Key: "$arrayElemAt", Value: bson.A{"$state.desired", 0}}},
+				bson.D{{Key: "setpoint", Value: "$setpoint"}},
 			}}}},
 		}}},
 		// status must be computed in its OWN stage: within a single $addFields
@@ -210,14 +235,20 @@ func (s *Store) CreateCommand(ctx context.Context, cmd *Command) error {
 	return err
 }
 
-// MarkSent flips a command to SENT (published to the broker).
+// MarkSent flips a command to SENT (published to the broker). It only moves
+// QUEUED commands: a fast device ack can land before this update runs, and
+// rewriting ACKED back to SENT would leave the command stuck until the
+// expiry sweeper (and lose the measured ack latency).
 func (s *Store) MarkSent(ctx context.Context, commandID string) {
 	now := time.Now().UTC()
-	_, _ = s.Commands.UpdateOne(ctx, bson.M{"commandId": commandID},
+	_, _ = s.Commands.UpdateOne(ctx,
+		bson.M{"commandId": commandID, "status": CmdQueued},
 		bson.M{"$set": bson.M{"status": CmdSent, "sentAt": now}})
 }
 
-// ApplyAck applies a device ack; latency is measured from sentAt.
+// ApplyAck applies a device ack; latency is measured from sentAt, falling
+// back to createdAt when the ack beats the SENT write (sub-millisecond acks
+// from an in-process simulator do exactly that).
 func (s *Store) ApplyAck(ctx context.Context, commandID string, ok bool, detail string, ackAt time.Time) bool {
 	var cmd Command
 	if err := s.Commands.FindOne(ctx, bson.M{"commandId": commandID}).Decode(&cmd); err != nil {
@@ -231,9 +262,13 @@ func (s *Store) ApplyAck(ctx context.Context, commandID string, ok bool, detail 
 	if !ok {
 		set["status"] = CmdFailed
 	}
+	base := cmd.CreatedAt
 	if cmd.SentAt != nil {
-		set["latencyMs"] = ackAt.Sub(*cmd.SentAt).Milliseconds()
+		base = *cmd.SentAt
+	} else {
+		set["sentAt"] = ackAt
 	}
+	set["latencyMs"] = ackAt.Sub(base).Milliseconds()
 	_, _ = s.Commands.UpdateOne(ctx, bson.M{"commandId": commandID}, bson.M{"$set": set})
 	s.AddEvent(ctx, Event{
 		Type: "command_" + set["status"].(string), DeviceID: cmd.DeviceID,

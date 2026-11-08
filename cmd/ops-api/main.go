@@ -14,9 +14,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -54,6 +56,11 @@ type server struct {
 	db   *mongo.Database
 	mqtt *autopaho.ConnectionManager
 	llm  *aiagent.Client
+
+	// aiAgentURL is the in-network ai-agent base URL. Feedback must go through
+	// it, not just be written to Mongo: Learn() lives in the agent's process
+	// and retrains its in-memory classifier.
+	aiAgentURL string
 
 	hub *ops.Hub
 }
@@ -111,7 +118,7 @@ func main() {
 			OnClientError: func(err error) { logger.Warn("mqtt client error", "err", err) },
 		},
 	}
-	srv := &server{log: logger, db: db, llm: aiagent.New(aiagent.Config{
+	srv := &server{log: logger, db: db, aiAgentURL: env("AI_AGENT_URL", "http://ai-agent:8091"), llm: aiagent.New(aiagent.Config{
 		BaseURL: env("OPENAI_BASE_URL", ""),
 		APIKey:  env("OPENAI_API_KEY", ""),
 		Model:   env("OPENAI_MODEL", "gpt-4o-mini"),
@@ -609,9 +616,8 @@ func (s *server) feedbackIncident(store *ops.Store) http.HandlerFunc {
 			ResolvedClass string `json:"resolvedClass"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		// resolve + record label (the agent picks the label up via its own
-		// /ai/feedback; simplest is to proxy the exact same mutation here and
-		// let the agent's Learn() run on next feedback — we store the label)
+		// Store the label first: the incident list must stay correct even if
+		// the agent is briefly unreachable.
 		set := bson.M{
 			"status":        "RESOLVED",
 			"resolvedAt":    time.Now().UTC(),
@@ -623,12 +629,68 @@ func (s *server) feedbackIncident(store *ops.Store) http.HandlerFunc {
 			writeJSON(w, nil, err, s.log)
 			return
 		}
+		// Then hand it to the agent: Learn() lives in that process, so a Mongo
+		// write alone would report success without changing the classifier.
+		learned := s.forwardFeedback(r.Context(), id.Hex(), body.ResolvedClass)
 		store.AddEvent(r.Context(), ops.Event{
 			Type: "incident_feedback", Actor: "operator:" + operatorName(r),
 			IncidentID: id.Hex(), Message: "resolved as " + body.ResolvedClass, At: time.Now().UTC(),
 		})
-		writeJSON(w, map[string]any{"learned": true}, nil, s.log)
+		writeJSON(w, map[string]any{"learned": learned}, nil, s.log)
 	}
+}
+
+// resetAgent clears the ai-agent's in-memory windows/cooldowns after a demo
+// reset. Telemetry is not touched: the agent resumes from new readings.
+func (s *server) resetAgent(ctx context.Context) {
+	if s.aiAgentURL == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.aiAgentURL+"/ai/reset", nil)
+	if err != nil {
+		s.log.Warn("ai reset request", "err", err)
+		return
+	}
+	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+	if err != nil {
+		s.log.Warn("ai reset forward failed", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		s.log.Warn("ai reset rejected", "status", resp.StatusCode)
+	}
+}
+
+// forwardFeedback posts an operator's resolution label to the ai-agent's
+// /ai/feedback endpoint, which updates the incident and runs Learn().
+func (s *server) forwardFeedback(ctx context.Context, incidentID, class string) bool {
+	if s.aiAgentURL == "" {
+		return false
+	}
+	payload, _ := json.Marshal(map[string]string{"resolvedClass": class})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		s.aiAgentURL+"/ai/feedback/"+url.PathEscape(incidentID), bytes.NewReader(payload))
+	if err != nil {
+		s.log.Warn("ai feedback request", "incidentId", incidentID, "err", err)
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		s.log.Warn("ai feedback forward failed", "incidentId", incidentID, "err", err)
+		return false
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusAccepted {
+		s.log.Warn("ai feedback rejected", "incidentId", incidentID, "status", resp.StatusCode)
+		return false
+	}
+	return true
 }
 
 func (s *server) getPolicy(store *ops.Store) http.HandlerFunc {
@@ -636,7 +698,7 @@ func (s *server) getPolicy(store *ops.Store) http.HandlerFunc {
 		var doc bson.M
 		err := store.Policy.FindOne(r.Context(), bson.D{}).Decode(&doc)
 		if err == mongo.ErrNoDocuments {
-			doc = bson.M{"minConfidence": 0.85, "maxEtaAlarmMinutes": 10.0,
+			doc = bson.M{"minConfidence": 0.85, "maxEtaAlarmMinutes": 45.0,
 				"autoCooldownMinutes": 30, "fleetCircuitBreaker": 2, "killSwitch": false}
 		}
 		writeJSON(w, doc, nil, s.log)
@@ -808,14 +870,15 @@ func (s *server) postReset(store *ops.Store) http.HandlerFunc {
 		commandID := bson.NewObjectID().Hex()
 		now := time.Now().UTC()
 		cmd := ops.Command{
-			CommandID: commandID, DeviceID: "FLEET", Action: "compressor_restart",
+			CommandID: commandID, DeviceID: "FLEET", Action: "demo_reset",
 			Status: ops.CmdQueued, IssuedBy: "operator:" + operatorName(r), CreatedAt: now, ExpiresAt: now.Add(30 * time.Second),
 		}
 		_ = store.CreateCommand(r.Context(), &cmd)
 		payload, _ := json.Marshal(map[string]any{
-			"id": commandID, "action": "compressor_restart", "issuedBy": "demo", "at": now,
+			"id": commandID, "action": "demo_reset", "issuedBy": "demo", "at": now,
 		})
-		// broadcast on a fleet-wide topic; the simulator resets all devices
+		// broadcast on a fleet-wide topic; the simulator restores every device
+		// (fault cleared, door closed, sensor calibrated, cabinet at setpoint)
 		if _, err := s.mqtt.Publish(r.Context(), &paho.Publish{
 			Topic:   "coldchain/fleet/commands",
 			QoS:     1,
@@ -825,12 +888,20 @@ func (s *server) postReset(store *ops.Store) http.HandlerFunc {
 			return
 		}
 		store.MarkSent(r.Context(), commandID)
+		// A fleet-wide broadcast has no per-device ack to wait for; mark it
+		// ACKED at publish time instead of letting the expiry sweeper emit a
+		// spurious command_TIMEOUT on every demo reset.
+		store.ApplyAck(r.Context(), commandID, true, "fleet broadcast accepted", now)
 		// full demo reset: clear desired overrides + resolve lingering OPEN
 		// incidents so a fresh judging run starts pristine
 		store.Twin.UpdateMany(r.Context(), bson.M{},
 			bson.M{"$set": bson.M{"desired.setpoint": -18, "desired.updatedAt": now, "desired.updatedBy": "system:reset"}})
 		store.Incidents.UpdateMany(r.Context(), bson.M{"status": "OPEN"},
 			bson.M{"$set": bson.M{"status": "RESOLVED", "resolvedAt": now, "resolvedBy": "system:reset"}})
+		// The agent's 6-minute rolling windows still hold the fault we just
+		// cleared, so without this it re-opens an incident seconds later. Its
+		// per-device cooldowns also have to die with the rehearsal.
+		s.resetAgent(r.Context())
 		store.AddEvent(r.Context(), ops.Event{
 			Type: "demo_reset", Message: "demo fleet reset issued (faults cleared, incidents resolved)",
 			Actor: "operator:" + operatorName(r), CommandID: commandID, At: now,

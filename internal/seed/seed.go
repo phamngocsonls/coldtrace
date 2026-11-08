@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/onemount/coldtrace/internal/ai"
+	"github.com/onemount/coldtrace/internal/telemetry"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -222,7 +223,60 @@ func DailyHistory(devices []string, days int, now time.Time, rngSeed int64) []Su
 	return out
 }
 
-// IncidentDocs / SummaryDocs adapt the typed slices for InsertMany.
+// ExcursionSample is one raw time-series reading for the HACCP demo. The
+// excursion CSV reads the raw `telemetry` collection (24 h TTL), so a fresh
+// stack has no excursion to audit until a fault runs long enough. Seeding
+// one historical excursion makes the export demonstrate its purpose instead
+// of returning a bare header — the same reasoning as the seeded incident
+// memory and tier history.
+type ExcursionSample struct {
+	TS                time.Time      `bson:"ts"`
+	Meta              telemetry.Meta `bson:"meta"`
+	TempC             float64        `bson:"tempC"`
+	PowerDraw         float64        `bson:"powerDraw"`
+	CompressorRunning bool           `bson:"compressorRunning"`
+	DoorOpen          bool           `bson:"doorOpen"`
+	Seq               int64          `bson:"seq"`
+	// Seeded marks generator output for idempotent replacement; the ingest
+	// document has no such field, and the audit pipeline ignores it.
+	Seeded bool `bson:"seeded"`
+}
+
+// Excursion renders a plausible failed-compressor excursion for one device:
+// 5 s cadence, a smooth rise from just below -14 °C to a worst reading near
+// -11.5 °C and back. The caller places it hours in the past so it never
+// appears in the live 15-minute chart, but stays inside the 24 h audit TTL.
+func Excursion(device string, start time.Time, minutes int) []ExcursionSample {
+	if minutes <= 0 {
+		return nil
+	}
+	const step = 5 * time.Second
+	n := minutes * 60 / int(step/time.Second)
+	if n < 2 {
+		n = 2
+	}
+	out := make([]ExcursionSample, 0, n)
+	for i := 0; i < n; i++ {
+		phase := float64(i) / float64(n-1)
+		// Endpoints sit just below the -14 °C threshold; the peak is
+		// -11.5 °C, a real HACCP-worthy breach but still under ALARM.
+		temp := -14.6 + 3.1*math.Sin(math.Pi*phase)
+		out = append(out, ExcursionSample{
+			TS:                start.Add(time.Duration(i) * step),
+			Meta:              telemetry.Meta{DeviceID: device},
+			TempC:             round2(temp),
+			PowerDraw:         round2(205 + 40*math.Sin(math.Pi*phase)),
+			CompressorRunning: false, // controller calling, compressor dead
+			DoorOpen:          false,
+			Seq:               int64(i),
+			Seeded:            true,
+		})
+	}
+	return out
+}
+
+// IncidentDocs / SummaryDocs / ExcursionDocs adapt the typed slices for
+// InsertMany.
 func IncidentDocs(inc []Incident) []any {
 	out := make([]any, len(inc))
 	for i := range inc {
@@ -232,6 +286,14 @@ func IncidentDocs(inc []Incident) []any {
 }
 
 func SummaryDocs(s []Summary) []any {
+	out := make([]any, len(s))
+	for i := range s {
+		out[i] = s[i]
+	}
+	return out
+}
+
+func ExcursionDocs(s []ExcursionSample) []any {
 	out := make([]any, len(s))
 	for i := range s {
 		out[i] = s[i]

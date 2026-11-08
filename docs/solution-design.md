@@ -52,22 +52,27 @@ after the product is at risk. ColdTrace closes that gap:
 STALE    lastSeen > 30 s old (or never seen)
 ALARM    reported.tempC > -10          (spoilage risk — the hard threshold)
 AT_RISK  tempC > -14
-         OR slopeCPM > 0.10 °C/min over a 5-minute window      (health view)
-         OR compressor off and tempC > desired.setpoint + 0.2  (fleet view)
+         OR tempC > desired.setpoint + 2.0   (losing ground, running or not)
+         OR compressor off and tempC > desired.setpoint + 0.2
+         OR slopeCPM > 0.10 °C/min over a 5-minute window  (health view only)
 OK       otherwise (a cold idle compressor is normal rest, not a fault)
 ```
 
 The AT_RISK rule is deliberate: a -18 °C box with the compressor resting must
-not paint the fleet yellow. Order matters: STALE → ALARM → AT_RISK → OK.
+not paint the fleet yellow. A running compressor is not a clean bill of health
+either: at more than +2 °C above setpoint the cabinet is losing ground and the
+fleet tile must agree with the slope view. Order matters:
+STALE → ALARM → AT_RISK → OK.
 
-Two views implement the same ladder against different sources: `/api/fleet`
-reads the device twin (`device_state`, latest reported state) and `/devices/health`
-reads the time series through `$setWindowFields`. Both compare against a
-**0.2 °C deadband**. A thermostat regulates within roughly ±0.2 °C, so a bare
-`tempC > setpoint` test is true for a healthy cabinet resting at -17.9 against
-a -18 setpoint — and the setpoint lives at `desired.setpoint` on the twin, not
-at the top level. Getting either detail wrong flickers the fleet yellow on its
-own duty cycle.
+Two views answer from different sources: `/api/fleet` reads the device twin
+(`device_state`, latest reported state) and `/devices/health` reads the time
+series through `$setWindowFields` and adds the slope signal. Both use the
+**0.2 °C deadband** for the stopped-compressor test. A thermostat regulates
+within roughly ±0.2 °C, so a bare `tempC > setpoint` test is true for a healthy
+cabinet resting at -17.9 against a -18 setpoint — and the setpoint lives at
+`desired.setpoint` on the twin, falling back to the registry's top-level
+`setpoint`. Getting either detail wrong flickers the fleet yellow on its own
+duty cycle.
 
 The slope is a `$derivative` over a **5-minute** `$setWindowFields` range, not
 a shorter one. A freezer runs a thermostat cycle (a short pull-down, then a
@@ -130,7 +135,7 @@ tail or loosened past the slowest fault.
                   drift_lag_cpm, compressor_reattain, trend_lag_cpm,
                   net_trend_cpm */],
   "decision": "AUTO",              // PROPOSED | AUTO | HOLD
-  "reason": "class approved, conf ≥ 0.85, ETA 7.5 ≤ 10 min",
+  "reason": "approved class, confidence and ETA gates passed within guardrails",
   "topFactors": [                   // explainability (weight × z, signed)
     {"feature": "door_events", "z": 66.70, "weight": 0.31,
      "contribution": 20.7, "direction": "raises"}
@@ -185,11 +190,23 @@ flowchart LR
 | Gate | Default | Effect when violated |
 |---|---|---|
 | class approved | — | decision = PROPOSED (never auto-acts) |
-| confidence | ≥ 0.85 | PROPOSED |
-| ETA to alarm | ≤ 10 min | PROPOSED (too slow to matter) |
+| confidence | ≥ 0.85 | HOLD (no autonomous action) |
+| ETA to alarm | ≤ 45 min | HOLD (too slow to matter) |
 | cooldown | per device | HOLD (no repeat remediation) |
 | fleet circuit breaker | ≥ 2 devices ALARM (`fleetCircuitBreaker: 2` in the seed) | HOLD everything (stop the stampede) |
 | **kill switch** | off | HOLD everything instantly |
+
+Two details that bit for real and are now pinned by tests:
+
+- **The open gate equals the policy gate.** An incident only OPENS when the
+  classifier's confidence clears the operator's `minConfidence` — the same
+  number that governs autonomy. The old fixed 0.55 floor opened incidents the
+  guardrails then refused (and once opened a `power_outage` at 0.58 seconds
+  after a recovery), so the queue filled with unactionable noise.
+- **A tripped breaker latches for the episode.** The incident carries a
+  `circuitBreaker` flag; a later tick that sees the fleet calm must not flip
+  the card back to AUTO and auto-remediate the very incident a human was
+  asked to review. It releases when the episode resolves.
 
 ### 4.3 Recovery arc (completes detect→act→**recover**→learn)
 

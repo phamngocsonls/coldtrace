@@ -134,3 +134,146 @@ func TestEvaluateOneOpenIncidentPerDevice(t *testing.T) {
 		t.Fatalf("reassessment must refresh the existing incident in place, not replace it")
 	}
 }
+
+// TestCountAlarmingExcludesCurrentDevice pins the fleet-circuit-breaker count
+// semantics. The breaker must read "devices in ALARM once this decision is
+// counted": the current device is excluded from the query (its own OPEN
+// incident must not count twice) and the caller adds 1. Two simultaneous
+// compressor failures therefore reach a threshold of 2 and the second one
+// HOLDS; a single device never trips the breaker against itself.
+func TestCountAlarmingExcludesCurrentDevice(t *testing.T) {
+	ctx := context.Background()
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		uri = "mongodb://localhost:27017"
+	}
+	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetServerSelectionTimeout(2 * time.Second))
+	if err != nil {
+		t.Skipf("mongo connect: %v", err)
+	}
+	defer func() { _ = client.Disconnect(ctx) }()
+	if err := client.Ping(ctx, nil); err != nil {
+		t.Skipf("no MongoDB at %s: %v", uri, err)
+	}
+
+	db := client.Database("coldtrace_agent_breaker_test")
+	if err := db.Drop(ctx); err != nil {
+		t.Fatalf("drop test db: %v", err)
+	}
+	defer func() { _ = db.Drop(ctx) }()
+
+	a := &agent{inc: db.Collection("ai_incidents")}
+	ins := func(device, class, status string) {
+		t.Helper()
+		if _, err := a.inc.InsertOne(ctx, bson.M{
+			"deviceId": device, "faultClass": class, "status": status,
+		}); err != nil {
+			t.Fatalf("insert %s/%s: %v", device, class, err)
+		}
+	}
+
+	ins("FZ-A", ai.ClassCompressorFailure, "OPEN")
+	ins("FZ-B", ai.ClassCompressorFailure, "RESOLVED")
+	ins("FZ-C", ai.ClassPowerOutage, "OPEN")
+
+	if got := a.countAlarming(ctx, "FZ-A"); got != 0 {
+		t.Fatalf("current device only: count = %d, want 0 (own incident excluded, resolved/other classes ignored)", got)
+	}
+	if got := a.countAlarming(ctx, "FZ-Z"); got != 1 {
+		t.Fatalf("other device view: count = %d, want 1", got)
+	}
+	if got := a.countAlarming(ctx, ""); got != 1 {
+		t.Fatalf("unfiltered count = %d, want 1", got)
+	}
+
+	// Second simultaneous compressor failure: FZ-A now sees one other device,
+	// so the decision being made is fleet alarm #2 -> breaker trips.
+	ins("FZ-B", ai.ClassCompressorFailure, "OPEN")
+	alarming := a.countAlarming(ctx, "FZ-A") + 1
+	if alarming != 2 {
+		t.Fatalf("two simultaneous faults: alarming = %d, want 2", alarming)
+	}
+	res := ai.Evaluate(ai.PolicyInput{
+		DeviceID: "FZ-A", FaultClass: ai.ClassCompressorFailure,
+		Confidence: 0.99, EtaAlarmMin: 5, AlarmingNow: alarming,
+		LastAutoFor: map[string]time.Time{}, Now: time.Now(),
+	}, ai.DefaultPolicy(), map[string]bool{ai.ClassCompressorFailure: true})
+	if res.Decision != ai.DecisionHold || !res.Circuit {
+		t.Fatalf("second simultaneous fault: decision = %s circuit=%v, want HOLD(circuit)", res.Decision, res.Circuit)
+	}
+}
+
+// TestCircuitHoldIsSticky pins the episode-level breaker semantics. Once a
+// correlated failure trips the fleet breaker, the incident must stay HOLD even
+// after the other device recovers: otherwise the next tick sees a clean
+// breaker, rewrites the card to AUTO, and auto-remediates the very incident a
+// human was asked to review (observed live: FZ-005 flipped HOLD -> AUTO when
+// FZ-004 resolved).
+func TestCircuitHoldIsSticky(t *testing.T) {
+	ctx := context.Background()
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		uri = "mongodb://localhost:27017"
+	}
+	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetServerSelectionTimeout(2 * time.Second))
+	if err != nil {
+		t.Skipf("mongo connect: %v", err)
+	}
+	defer func() { _ = client.Disconnect(ctx) }()
+	if err := client.Ping(ctx, nil); err != nil {
+		t.Skipf("no MongoDB at %s: %v", uri, err)
+	}
+
+	db := client.Database("coldtrace_agent_sticky_test")
+	if err := db.Drop(ctx); err != nil {
+		t.Fatalf("drop test db: %v", err)
+	}
+	defer func() { _ = db.Drop(ctx) }()
+
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := &agent{
+		log:          log,
+		db:           db,
+		coll:         db.Collection("telemetry"),
+		inc:          db.Collection("ai_incidents"),
+		approv:       db.Collection("ai_approvals"),
+		cmds:         db.Collection("commands"),
+		model:        ai.NewClassifier(log),
+		wins:         map[string]*ai.Window{},
+		scorer:       map[string]*ai.AnomalyScorer{},
+		autoco:       map[string]time.Time{},
+		healthySince: map[string]time.Time{},
+		approvCache:  map[string]bool{},
+		tracer:       trace.NewNoopTracerProvider().Tracer("test"),
+		mem:          ai.NewIncidentMemory(db.Collection("ai_incidents")),
+	}
+	if _, err := a.approv.InsertOne(ctx, bson.M{"faultClass": ai.ClassCompressorFailure}); err != nil {
+		t.Fatalf("approve class: %v", err)
+	}
+	if _, err := a.inc.InsertOne(ctx, bson.M{
+		"deviceId": "FZ-CB", "faultClass": ai.ClassCompressorFailure,
+		"status": "OPEN", "decision": string(ai.DecisionHold),
+		"reason":         "fleet circuit breaker: too many devices in ALARM — auto-actions suspended, human review required",
+		"circuitBreaker": true, "openedAt": time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("insert held incident: %v", err)
+	}
+
+	// The breaker is clear on this tick (no other OPEN compressor_failure),
+	// so Evaluate alone would return AUTO. The latched incident must hold.
+	a.evaluate(ctx, "FZ-CB", faultWindow(t, log, sim.FaultCompressorFailure, 51, 10*time.Minute), time.Now())
+
+	var got incidentDoc
+	if err := a.inc.FindOne(ctx, bson.M{"deviceId": "FZ-CB", "status": "OPEN"}).Decode(&got); err != nil {
+		t.Fatalf("find incident: %v", err)
+	}
+	if got.Decision != string(ai.DecisionHold) {
+		t.Errorf("decision = %s, want HOLD (breaker must stay latched for the episode)", got.Decision)
+	}
+	if !got.CircuitBreaker {
+		t.Errorf("circuitBreaker flag cleared on refresh")
+	}
+	if got.RemediatedAt != nil {
+		t.Errorf("breaker-held incident was auto-remediated (remediatedBy=%s)", got.RemediatedBy)
+	}
+}

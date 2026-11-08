@@ -3,6 +3,8 @@ package ai
 import (
 	"context"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // Incident memory ranks in-process by cosine over the 8-dim feature vectors.
@@ -40,6 +42,28 @@ func TestTopSimilarBoundsK(t *testing.T) {
 	}
 	if got := TopSimilar([]float64{1, 0}, cands, vecs, 10); len(got) != 2 {
 		t.Fatalf("k>len should keep all, got %d", len(got))
+	}
+}
+
+// The incident document is read by the console through ops-api, which does
+// not decode into this struct. Stored similar matches must therefore use the
+// same camelCase keys the console reads; a struct with only json tags used to
+// persist deviceid/faultclass/openedat and the panel rendered blank.
+func TestSimilarMatchBSONKeys(t *testing.T) {
+	b, err := bson.Marshal(SimilarMatch{
+		DeviceID: "FZ-004", FaultClass: "door_left_open", Score: 0.91,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got bson.M
+	if err := bson.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"deviceId", "faultClass", "score", "openedAt"} {
+		if _, ok := got[k]; !ok {
+			t.Errorf("BSON key %q missing (got %v)", k, got)
+		}
 	}
 }
 

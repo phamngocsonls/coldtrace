@@ -5,11 +5,16 @@ import "time"
 
 // SimilarMatch is one similar past incident (agent-side struct; used by both
 // incident memory in memory.go).
+//
+// The BSON tags are load-bearing: the console reads the incident document
+// straight from Mongo through ops-api and expects camelCase keys. Without
+// them the driver stored deviceid/faultclass/openedat and the "similar past
+// incidents" panel rendered blank fields on stage.
 type SimilarMatch struct {
-	DeviceID   string    `json:"deviceId"`
-	FaultClass string    `json:"faultClass"`
-	Score      float64   `json:"score"`
-	OpenedAt   time.Time `json:"openedAt"`
+	DeviceID   string    `bson:"deviceId"   json:"deviceId"`
+	FaultClass string    `bson:"faultClass" json:"faultClass"`
+	Score      float64   `bson:"score"      json:"score"`
+	OpenedAt   time.Time `bson:"openedAt"   json:"openedAt"`
 }
 
 // TopSimilar ranks candidates by cosine similarity to v.

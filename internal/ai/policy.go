@@ -32,16 +32,23 @@ type PolicyInput struct {
 // PolicyConfig tunes the guardrails.
 type PolicyConfig struct {
 	MinConfidence       float64       // 0.85
-	MaxEtaAlarmMinutes  float64       // 10
+	MaxEtaAlarmMinutes  float64       // 45
 	AutoCooldown        time.Duration // 30m per device
 	FleetCircuitBreaker int           // suspend auto if >= N devices ALARM
 }
 
 // DefaultPolicy is the hackathon demo configuration.
+//
+// The ETA horizon is 45 minutes, not 10: a compressor failure at the -18 °C
+// setpoint warms at ~0.3 °C/min, so time-to-alarm is ~30-36 minutes at the
+// moment the classifier is confident. A 10-minute horizon would HOLD every
+// detection until the cabinet was already near excursion — the opposite of
+// what the guardrail is for. 45 minutes still rejects a slow drift that has
+// no chance of breaching during the shift.
 func DefaultPolicy() PolicyConfig {
 	return PolicyConfig{
 		MinConfidence:       0.85,
-		MaxEtaAlarmMinutes:  10,
+		MaxEtaAlarmMinutes:  45,
 		AutoCooldown:        30 * time.Minute,
 		FleetCircuitBreaker: 2,
 	}

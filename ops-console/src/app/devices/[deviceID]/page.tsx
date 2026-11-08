@@ -1,6 +1,6 @@
 "use client";
 // Device detail: live chart, twin panel, controls, command history, trace link.
-import { use, useRef, useState } from "react";
+import { use, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { datadogTraceURL } from "@/lib/datadog";
@@ -45,7 +45,10 @@ export default function DevicePage({ params }: { params: Promise<{ deviceID: str
     queryKey: ["history", deviceID, tier],
     queryFn: () => api.history(deviceID, tier, tier === "hourly" ? 7 : 30),
   });
-  const histPoints = (history.data ?? []).map((p) => ({ ts: p.bucket, temp: p.avgTempC }));
+  const histPoints = useMemo(
+    () => (history.data ?? []).map((p) => ({ ts: p.bucket, temp: p.avgTempC })),
+    [history.data],
+  );
   const commands = useQuery({
     queryKey: ["commands", deviceID],
     queryFn: async () =>
@@ -190,7 +193,10 @@ export default function DevicePage({ params }: { params: Promise<{ deviceID: str
             </span>
           )}
         </div>
-        <TempChart points={histPoints} setpoint={setpoint} paused />
+        {/* History is not live: passing paused would freeze uPlot before the
+            tier switch's new data arrives, so hourly stayed on screen after
+            selecting daily. */}
+        <TempChart points={histPoints} setpoint={setpoint} paused={false} />
       </section>
     </div>
   );

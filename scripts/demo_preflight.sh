@@ -88,7 +88,17 @@ else
   bad "series chart empty" "GET /api/devices/FZ-003/series returned no temp points"
 fi
 
-# 8. Datadog: Agent running + collector ready. Telemetry is only useful if
+# 8. HACCP export has at least one excursion row. The audit reads raw
+# telemetry (24h TTL); seedhistory plants a historical breach so the page
+# demonstrates the export before a live fault has crossed -14C.
+CSV_ROWS=$(curl -s -m 5 http://localhost:8092/api/compliance/excursions.csv 2>/dev/null | awk 'END{print NR-1}')
+if [ "${CSV_ROWS:-0}" -ge 1 ] 2>/dev/null; then
+  ok "compliance CSV ($CSV_ROWS device row(s))"
+else
+  bad "compliance CSV empty" "run: MONGO_URI=mongodb://localhost:27017 go run ./tools/seedhistory"
+fi
+
+# 9. Datadog: Agent running + collector ready. Telemetry is only useful if
 # both are up — the collector exports to Datadog and the Agent ships infra
 # metrics, container logs and the MongoDB fleet rollup.
 if docker compose ps --status running --format '{{.Service}}' 2>/dev/null | grep -qx datadog-agent; then

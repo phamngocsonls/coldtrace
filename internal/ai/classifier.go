@@ -165,6 +165,9 @@ func (c *Classifier) predictLocked(xs ...[]float64) (string, map[string]float64)
 func (c *Classifier) Learn(x []float64, class string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if len(x) != NumFeatures {
+		return // no feature vector (legacy/seed doc): nothing to learn from
+	}
 	y := -1
 	for k := range Classes {
 		if Classes[k] == class {

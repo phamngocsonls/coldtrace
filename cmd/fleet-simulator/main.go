@@ -115,11 +115,19 @@ func main() {
 			var cmd struct {
 				Action string `json:"action"`
 			}
-			if err := json.Unmarshal(m.Payload, &cmd); err == nil && cmd.Action == string(sim.ActionCompressorRestart) {
-				for _, d := range devices {
-					d.sim.SetFault(sim.FaultNone)
+			if err := json.Unmarshal(m.Payload, &cmd); err == nil {
+				switch sim.Action(cmd.Action) {
+				case sim.ActionCompressorRestart:
+					for _, d := range devices {
+						d.sim.SetFault(sim.FaultNone)
+					}
+					logger.Info("fleet_reset_applied", "devices", len(devices))
+				case sim.ActionDemoReset:
+					for _, d := range devices {
+						d.sim.Reset()
+					}
+					logger.Info("fleet_demo_reset_applied", "devices", len(devices), "detail", "faults cleared, cabinets at setpoint")
 				}
-				logger.Info("fleet_reset_applied", "devices", len(devices))
 			}
 			return
 		}

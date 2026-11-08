@@ -50,23 +50,27 @@ func env(k, def string) string {
 
 // incidentDoc mirrors the `ai_incidents` collection.
 type incidentDoc struct {
-	ID           bson.ObjectID     `bson:"_id,omitempty"     json:"id,omitempty"`
-	DeviceID     string            `bson:"deviceId"          json:"deviceId"`
-	Class        string            `bson:"faultClass"        json:"faultClass"`
-	Confidence   float64           `bson:"confidence"        json:"confidence"`
-	EtaAlarmMin  *float64          `bson:"etaAlarmMin,omitempty" json:"etaAlarmMin,omitempty"`
-	Features     []float64         `bson:"features"          json:"features"`
-	Decision     string            `bson:"decision"          json:"decision"` // PROPOSED|AUTO|HOLD
-	Reason       string            `bson:"reason"            json:"reason"`
-	Similar      []ai.SimilarMatch `bson:"similar,omitempty" json:"similar,omitempty"`
-	Status       string            `bson:"status"            json:"status"` // OPEN|RESOLVED
-	RemediatedAt *time.Time        `bson:"remediatedAt,omitempty" json:"remediatedAt,omitempty"`
-	RemediatedBy string            `bson:"remediatedBy,omitempty" json:"remediatedBy,omitempty"`
-	OpenedAt     time.Time         `bson:"openedAt"          json:"openedAt"`
-	TraceID      string            `bson:"traceId,omitempty" json:"traceId,omitempty"`
-	TopFactors   []ai.TopFactor    `bson:"topFactors,omitempty" json:"topFactors,omitempty"`
-	RCA          *IncidentRCA      `bson:"rca,omitempty"     json:"rca,omitempty"`
-	Acknowledged *bool             `bson:"acknowledged,omitempty" json:"acknowledged,omitempty"`
+	ID          bson.ObjectID     `bson:"_id,omitempty"     json:"id,omitempty"`
+	DeviceID    string            `bson:"deviceId"          json:"deviceId"`
+	Class       string            `bson:"faultClass"        json:"faultClass"`
+	Confidence  float64           `bson:"confidence"        json:"confidence"`
+	EtaAlarmMin *float64          `bson:"etaAlarmMin,omitempty" json:"etaAlarmMin,omitempty"`
+	Features    []float64         `bson:"features"          json:"features"`
+	Decision    string            `bson:"decision"          json:"decision"` // PROPOSED|AUTO|HOLD
+	Reason      string            `bson:"reason"            json:"reason"`
+	Similar     []ai.SimilarMatch `bson:"similar,omitempty" json:"similar,omitempty"`
+	// CircuitBreaker pins an episode that tripped the fleet breaker. Without
+	// it the decision flipped back to AUTO as soon as another device
+	// recovered, auto-remediating the very incident the breaker had held.
+	CircuitBreaker bool           `bson:"circuitBreaker,omitempty" json:"circuitBreaker,omitempty"`
+	Status         string         `bson:"status"            json:"status"` // OPEN|RESOLVED
+	RemediatedAt   *time.Time     `bson:"remediatedAt,omitempty" json:"remediatedAt,omitempty"`
+	RemediatedBy   string         `bson:"remediatedBy,omitempty" json:"remediatedBy,omitempty"`
+	OpenedAt       time.Time      `bson:"openedAt"          json:"openedAt"`
+	TraceID        string         `bson:"traceId,omitempty" json:"traceId,omitempty"`
+	TopFactors     []ai.TopFactor `bson:"topFactors,omitempty" json:"topFactors,omitempty"`
+	RCA            *IncidentRCA   `bson:"rca,omitempty"     json:"rca,omitempty"`
+	Acknowledged   *bool          `bson:"acknowledged,omitempty" json:"acknowledged,omitempty"`
 }
 
 // IncidentRCA is the LLM root-cause analysis stored with the incident.
@@ -216,6 +220,7 @@ func main() {
 	r.Delete("/ai/approvals/{faultClass}", a.revoke)
 	r.Get("/ai/approvals", a.listApprovals)
 	r.Post("/ai/feedback/{incidentID}", a.feedback) // resolution label -> Learn()
+	r.Post("/ai/reset", a.reset)                    // demo cleanup: forget in-memory state
 
 	logger.Info("ai agent online", "broker", *mqttURL)
 	srv := &http.Server{Addr: ":" + env("AI_PORT", "8091"), Handler: otelhttp.NewHandler(r, "coldtrace-ai-agent")}
@@ -535,8 +540,13 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 		return
 	}
 
-	// only act on non-healthy calls with meaningful confidence
-	if class == ai.ClassHealthy || conf < 0.55 {
+	// Open an incident only when the policy would trust the call. The old
+	// 0.55 floor opened incidents the guardrails then refused, and it once
+	// opened a power_outage at 0.58 seconds after a recovery — noise on the
+	// stage. Binding the open gate to the same MinConfidence the policy uses
+	// keeps detection and autonomy aligned (and follows the operator's edit).
+	policyCfg := a.policyConfig(ctx)
+	if class == ai.ClassHealthy || conf < policyCfg.MinConfidence {
 		return
 	}
 
@@ -550,8 +560,12 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 		lastAuto = map[string]time.Time{deviceID: t}
 	}
 	a.mu.Unlock()
-	alarming := a.countAlarming(ctx)
-	policyCfg := a.policyConfig(ctx)
+	// The breaker counts the fleet *including* the device being decided. Our
+	// own OPEN incident (if any) is excluded from the query so a single
+	// already-alarming device does not count itself twice, then +1 accounts
+	// for this decision: two devices alarming simultaneously reach the
+	// configured threshold of 2.
+	alarming := a.countAlarming(ctx, deviceID) + 1
 	res := ai.Evaluate(ai.PolicyInput{
 		DeviceID: deviceID, FaultClass: class, Confidence: conf,
 		EtaAlarmMin: eta, AlarmingNow: alarming, LastAutoFor: lastAuto, Now: now,
@@ -594,7 +608,27 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 				"deviceId", deviceID, "from", old.Class, "to", class,
 				"confidence", round3(conf))
 		}
-		decisionChanged := old.Decision != string(res.Decision)
+		// A breaker-held episode stays held for its whole life. The breaker
+		// exists so a human reviews a correlated failure while the fleet is
+		// compromised; letting the next tick auto-remediate because another
+		// device recovered defeats it (observed live: FZ-005 flipped HOLD ->
+		// AUTO when FZ-004 resolved).
+		circuitLatched := old.CircuitBreaker || res.Circuit
+		stickyCircuit := circuitLatched && old.RemediatedAt == nil
+		// Once this episode has actually been auto-remediated, its decision is
+		// history: later ticks see the device cooldown (or the fleet breaker
+		// reacting to the incident itself) and would rewrite the card to HOLD,
+		// claiming the agent refused while the command lifecycle shows ACKED.
+		decision, reason := string(res.Decision), res.Reason
+		if stickyCircuit {
+			decision = string(ai.DecisionHold)
+			reason = old.Reason
+		}
+		if old.RemediatedAt != nil {
+			decision = string(ai.DecisionAuto)
+			reason = "auto-remediated; awaiting recovery (repeat actions blocked by cooldown)"
+		}
+		decisionChanged := old.Decision != decision
 		// etaAlarmMin NaN (no rising path) => store nil, never a NaN double
 		var etaAny any
 		if !math.IsNaN(eta) {
@@ -603,7 +637,8 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 		if _, err := a.inc.UpdateOne(ctx, bson.M{"_id": old.ID},
 			bson.M{"$set": bson.M{
 				"etaAlarmMin": etaAny, "confidence": conf,
-				"decision": string(res.Decision), "reason": res.Reason,
+				"decision": decision, "reason": reason,
+				"circuitBreaker": circuitLatched,
 			}}); err != nil {
 			a.log.Error("incident refresh failed", "err", err)
 			return
@@ -617,8 +652,9 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 			_, _ = a.inc.UpdateOne(ctx, bson.M{"_id": old.ID},
 				bson.M{"$set": bson.M{"topFactors": topFactors}})
 		}
-		// auto-remediate on the refreshed decision too
-		if res.Decision == ai.DecisionAuto {
+		// auto-remediate on the refreshed decision too — but never for a
+		// breaker-held or already-remediated episode.
+		if res.Decision == ai.DecisionAuto && !stickyCircuit && old.RemediatedAt == nil {
 			if err := a.remediate(ctx, deviceID); err == nil {
 				t := now
 				_, _ = a.inc.UpdateOne(ctx, bson.M{"_id": old.ID}, bson.M{"$set": bson.M{
@@ -633,7 +669,7 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 		}
 		a.log.Info("ai_decision_refreshed",
 			"deviceId", deviceID, "class", class, "confidence", round3(conf),
-			"etaAlarmMin", round3(eta), "decision", string(res.Decision), "reason", res.Reason)
+			"etaAlarmMin", round3(eta), "decision", decision, "reason", reason)
 		return
 	} else if !errors.Is(errRefresh, mongo.ErrNoDocuments) {
 		a.log.Error("incident lookup failed", "err", errRefresh)
@@ -643,7 +679,8 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 	doc := incidentDoc{
 		DeviceID: deviceID, Class: class, Confidence: conf,
 		Features: feats, Decision: string(res.Decision),
-		Reason: res.Reason, Similar: similar, Status: "OPEN", OpenedAt: now,
+		Reason: res.Reason, Similar: similar, CircuitBreaker: res.Circuit,
+		Status: "OPEN", OpenedAt: now,
 		TraceID: traceID, TopFactors: topFactors,
 	}
 	// etaAlarmMin is NaN when the device is not on a rising path (e.g.
@@ -769,10 +806,19 @@ func (a *agent) similarPast(ctx context.Context, feats []float64, excludeDevice 
 	return a.mem.TopSimilar(ctx, feats, excludeDevice, 3)
 }
 
-// countAlarming counts devices with an OPEN ALARM-class incident.
+// countAlarming counts OTHER devices with an OPEN ALARM-class incident.
 // NOTE: ai_incidents documents store the class under "faultClass".
-func (a *agent) countAlarming(ctx context.Context) int {
-	n, _ := a.inc.CountDocuments(ctx, bson.M{"status": "OPEN", "faultClass": ai.ClassCompressorFailure})
+//
+// The caller adds 1 for the decision it is about to make, so the count is
+// "how many devices are in ALARM once this one is counted". Excluding the
+// current device matters on incident refresh: the device's own OPEN incident
+// must count once, not twice.
+func (a *agent) countAlarming(ctx context.Context, excludeDevice string) int {
+	q := bson.M{"status": "OPEN", "faultClass": ai.ClassCompressorFailure}
+	if excludeDevice != "" {
+		q["deviceId"] = bson.M{"$ne": excludeDevice}
+	}
+	n, _ := a.inc.CountDocuments(ctx, q)
 	return int(n)
 }
 
@@ -867,6 +913,28 @@ func (a *agent) listApprovals(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(docs)
+}
+
+// reset POST /ai/reset — demo cleanup hook. Clears the in-memory rolling
+// windows, anomaly scorers, auto-remediation cooldowns and healthy streaks.
+//
+// Without this, a demo reset is only half a reset: the agent's 6-minute window
+// still holds the fault that was just cleared, so it re-opens an incident
+// seconds after /api/demo/reset resolved everything, and a rehearsed AUTO on a
+// device keeps its 30-minute cooldown into the real judging run. New telemetry
+// refills the windows from the reset instant onward.
+func (a *agent) reset(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	a.wins = map[string]*ai.Window{}
+	a.scorer = map[string]*ai.AnomalyScorer{}
+	a.autoco = map[string]time.Time{}
+	a.healthySince = map[string]time.Time{}
+	a.policyCache = nil
+	a.approvCache = nil
+	a.mu.Unlock()
+	a.log.Info("ai_state_reset", "detail", "windows, scorers, cooldowns and healthy streaks cleared")
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"reset":true}`))
 }
 
 // feedback POST /ai/feedback/{incidentID} {resolvedClass: "..."} — resolves the

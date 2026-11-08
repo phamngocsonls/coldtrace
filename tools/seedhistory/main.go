@@ -1,6 +1,6 @@
 // Command seedhistory warms a fresh ColdTrace stack with demo HISTORY.
 //
-// Two cold-start gaps, both found by the pre-demo audit:
+// Three cold-start gaps, all found by the pre-demo audit:
 //
 //  1. The AI incident memory (ai.IncidentMemory) scans RESOLVED
 //     incidents — a fresh stack has none, so the "similar past incidents"
@@ -14,9 +14,14 @@
 //     weeks of daily — strictly OLDER than the rollup's live window, so
 //     nothing collides with its $merge unique index.
 //
+//  3. The HACCP export reads raw telemetry (24 h TTL), so a fresh stack
+//     exports a header with no rows. A seeded historical excursion gives
+//     the compliance page a real breach to show before a live fault has
+//     run long enough to cross -14 °C.
+//
 // Idempotent: everything this tool writes carries seeded:true and a
 // re-run replaces exactly that set (never live agent incidents, never
-// rollup-written buckets).
+// rollup-written buckets, never live readings).
 //
 // usage:
 //
@@ -93,6 +98,8 @@ func main() {
 	incidents := flag.Int("incidents", 24, "resolved historical incidents to seed")
 	hourlyDays := flag.Int("hourly-days", 6, "days of warm-tier (telemetry_hourly) history; 0 disables")
 	dailyDays := flag.Int("daily-days", 21, "days of cold-tier (telemetry_daily) history; 0 disables")
+	excursionMinutes := flag.Int("excursion-minutes", 22, "length of the seeded raw excursion for the HACCP CSV; 0 disables")
+	excursionDevice := flag.String("excursion-device", "FZ-009", "device that carries the seeded excursion (an idle demo device)")
 	flag.Parse()
 
 	ctx, contextCancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -161,6 +168,26 @@ func main() {
 		}
 		fmt.Printf("seeded: %d daily buckets over %d day(s) (replaced %d) -> telemetry_daily\n",
 			len(docs), *dailyDays, del)
+	}
+
+	// 4) Raw excursion for the compliance export. The audit reads raw
+	// telemetry (24 h TTL), so without this the CSV is header-only on a
+	// freshly seeded stack. Place it 8 h back: inside the audit window,
+	// outside the live 15-minute chart, and not on a device the runbook
+	// injects faults into.
+	if *excursionMinutes > 0 {
+		coll := db.Collection("telemetry")
+		del, err := coll.DeleteMany(ctx, bson.M{"seeded": true, "meta.deviceId": *excursionDevice})
+		if err != nil {
+			log.Fatalf("excursion delete: %v", err)
+		}
+		start := now.Add(-8 * time.Hour).Truncate(time.Minute)
+		docs := seed.ExcursionDocs(seed.Excursion(*excursionDevice, start, *excursionMinutes))
+		if _, err := coll.InsertMany(ctx, docs, options.InsertMany().SetOrdered(false)); err != nil {
+			log.Fatalf("excursion insert: %v", err)
+		}
+		fmt.Printf("seeded: %d raw readings, %d-minute excursion on %s (replaced %d) -> telemetry\n",
+			len(docs), *excursionMinutes, *excursionDevice, del.DeletedCount)
 	}
 
 	// The story the seed enables, stated where the operator will see it:

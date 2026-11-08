@@ -35,6 +35,10 @@ const (
 	ActionSetSetpoint            Action = "set_setpoint" // payload: {"setpoint":-20}
 	ActionDefrost                Action = "defrost"
 	ActionReboot                 Action = "reboot"
+	// ActionDemoReset restores a pristine demo state (fault-free at the
+	// default setpoint). Distinct from compressor_restart, which lets the
+	// cabinet pull down gradually so the recovery arc stays visible.
+	ActionDemoReset Action = "demo_reset"
 )
 
 const (
@@ -141,6 +145,26 @@ func newWithSeed(id string, log *slog.Logger, seed int64) *Device {
 	}
 }
 
+// Reset restores the pristine demo state: fault-free, door closed, sensor
+// calibrated, cabinet at the default setpoint, compressor ready. Used by the
+// operator's fleet reset (rehearsal cleanup), never by AI remediation: a real
+// compressor_restart must let the cabinet pull down gradually so judges see
+// the recovery arc instead of a teleport.
+func (d *Device) Reset() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.faulted = FaultNone
+	d.setpoint = normalTarget
+	d.tempC = normalTarget
+	d.sensorOffsetC = 0
+	d.doorOpen = false
+	d.doorTicks = 0
+	d.defrostUntil = time.Time{}
+	d.cooling = true
+	d.compressorRunning = true
+	d.motorRunning = true
+}
+
 // SetFaultMode enters/exits compressor_failure mode (compatibility wrapper).
 func (d *Device) SetFaultMode(on bool) {
 	if on {
@@ -225,6 +249,9 @@ func (d *Device) HandleCommand(commandID string, action Action, payload []byte) 
 	case ActionEnterCompressorFailure:
 		d.SetFault(FaultCompressorFailure)
 		ack.Detail = "compressor failure injected"
+	case ActionDemoReset:
+		d.Reset()
+		ack.Detail = "demo state reset"
 	default:
 		ack.OK = false
 		ack.Detail = "unknown action"

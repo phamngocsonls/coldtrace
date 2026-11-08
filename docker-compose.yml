@@ -177,6 +177,7 @@ services:
       - MQTT_BROKER=mqtt://broker:1883
       - OPS_PORT=8092
       - OPS_TOKEN=${OPS_TOKEN:-}
+      - AI_AGENT_URL=${AI_AGENT_URL:-http://ai-agent:8091}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}
       - SERVICE_VERSION=${SERVICE_VERSION:-1.0.0}
       # AI copilot/RCA engines, highest priority first:

@@ -75,6 +75,40 @@ func TestStatusExprIdleCompressorAtSetpoint(t *testing.T) {
 			expect: StatusOK,
 		},
 		{
+			// The live miss that prompted this rule: FZ-003 was recovering
+			// from a failed compressor, reading -14.4 °C with the compressor
+			// running, and the fleet tile stayed green until -14. A running
+			// compressor cannot cool a cabinet 3.6 °C above setpoint; the
+			// gateway's slope view already called it AT_RISK.
+			name: "compressor running but >2C above setpoint -> AT_RISK",
+			doc: bson.M{
+				"lastSeen": now,
+				"reported": bson.M{"tempC": -14.4, "compressorRunning": true},
+				"desired":  bson.M{"setpoint": -18.0},
+			},
+			expect: StatusAtRisk,
+		},
+		{
+			name: "compressor running just outside warm band -> AT_RISK",
+			doc: bson.M{
+				"lastSeen": now,
+				"reported": bson.M{"tempC": -15.9, "compressorRunning": true},
+				"desired":  bson.M{"setpoint": -18.0},
+			},
+			expect: StatusAtRisk,
+		},
+		{
+			// Between the tight deadband and the warm band, a running
+			// compressor is doing its job (e.g. recovering from a defrost).
+			name: "compressor running within warm band -> OK",
+			doc: bson.M{
+				"lastSeen": now,
+				"reported": bson.M{"tempC": -16.5, "compressorRunning": true},
+				"desired":  bson.M{"setpoint": -18.0},
+			},
+			expect: StatusOK,
+		},
+		{
 			name: "above the hard threshold -> ALARM",
 			doc: bson.M{
 				"lastSeen": now,
@@ -84,7 +118,41 @@ func TestStatusExprIdleCompressorAtSetpoint(t *testing.T) {
 			expect: StatusAlarm,
 		},
 		{
-			name: "no desired state is unknown, not a fault -> OK",
+			// The twin is written by ingest (reported only), so a device that
+			// nobody has re-set has no `desired` subdocument. The registry's
+			// top-level setpoint is the configured default and must still
+			// catch a stopped compressor warming the box.
+			name: "no desired, registry setpoint, compressor off -> AT_RISK",
+			doc: bson.M{
+				"lastSeen": now,
+				"setpoint": -18.0,
+				"reported": bson.M{"tempC": -16.9, "compressorRunning": false},
+			},
+			expect: StatusAtRisk,
+		},
+		{
+			name: "no desired, registry setpoint, resting within deadband -> OK",
+			doc: bson.M{
+				"lastSeen": now,
+				"setpoint": -18.0,
+				"reported": bson.M{"tempC": -17.9, "compressorRunning": false},
+			},
+			expect: StatusOK,
+		},
+		{
+			// Operator tightened the setpoint to -20: at -17 the box is warm
+			// relative to the override, despite the looser registry default.
+			name: "operator override wins over registry setpoint",
+			doc: bson.M{
+				"lastSeen": now,
+				"setpoint": -16.0,
+				"reported": bson.M{"tempC": -17.0, "compressorRunning": false},
+				"desired":  bson.M{"setpoint": -20.0},
+			},
+			expect: StatusAtRisk,
+		},
+		{
+			name: "no desired and no setpoint is unknown, not a fault -> OK",
 			doc: bson.M{
 				"lastSeen": now,
 				"reported": bson.M{"tempC": -17.9, "compressorRunning": false},
