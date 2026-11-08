@@ -67,8 +67,12 @@ from the Agent's MongoDB custom query.
 Detection is not instant: the classifier needs a warm ~6-minute window
 (72 samples @ 5 s) plus 2–4 minutes of fault physics before it is confident,
 so an incident lands **~2.5–4 minutes after injection** (up to ~6.5 min right
-after an ai-agent restart or `/api/demo/reset` — both clear the windows). Do
-not run cleanup or restart ai-agent in the last ~7 minutes before judging.
+after an ai-agent restart or `/api/demo/reset` — both clear the windows).
+The wait is **enforced by code**: the evaluation loop skips any device whose
+window is not full (a partial window is out-of-distribution and the model is
+confidently wrong on it — that rule exists because a 28-sample window once
+classified a healthy thermostat coast as `compressor_failure` at 0.998).
+Do not run cleanup or restart ai-agent in the last ~7 minutes before judging.
 
 | t | Action | What judges see |
 |---|---|---|

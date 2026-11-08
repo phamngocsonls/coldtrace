@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"github.com/onemount/coldtrace/internal/aggdb"
 )
 
 // SiteInsight is one site's rollup for the console "Sites" strip.
@@ -69,8 +71,13 @@ func (s *Store) SiteInsights(ctx context.Context) ([]SiteInsight, error) {
 		}}},
 	}
 
-	trendRows := bson.A{
+	// $setWindowFields requires a unique sortBy per partition — MQTT QoS 1
+	// redelivery breaks that, so dedup first (same story as the excursions
+	// audit; the stage restores ts ordering itself).
+	trendRows := append(bson.A{
 		bson.D{{Key: "$match", Value: bson.M{"ts": bson.M{"$gte": windowStart}}}},
+	}, aggdb.DedupByTS()...)
+	trendRows = append(trendRows,
 		bson.D{{Key: "$setWindowFields", Value: bson.D{
 			{Key: "partitionBy", Value: "$meta.deviceId"},
 			{Key: "sortBy", Value: bson.D{{Key: "ts", Value: 1}}},
@@ -98,7 +105,7 @@ func (s *Store) SiteInsights(ctx context.Context) ([]SiteInsight, error) {
 			{Key: "_id", Value: "$site"},
 			{Key: "maxSlopeCpm", Value: bson.D{{Key: "$max", Value: "$maxSlope"}}},
 		}}},
-	}
+	)
 
 	incidentRows := bson.A{
 		bson.D{{Key: "$lookup", Value: bson.D{

@@ -107,8 +107,10 @@ curl -s -X POST localhost:8092/api/demo/reset
 
 **The two rules that save every demo:**
 1. **Wait ~7 min after reset/restart before injecting** — the classifier needs
-   a warm 6-min window (72 samples @ 5 s). Detection lands ~2.5–4 min after
-   inject when warm.
+   a full 6-min window (72 samples @ 5 s). Evaluation is **skipped until the
+   window is full** (code-enforced: a partial window is out-of-distribution
+   and the model is confidently wrong on it). Detection lands ~2.5–4 min
+   after inject when warm.
 2. **Never run cleanup or reset mid-scenario** — it resolves all OPEN
    incidents and clears the AI windows, which will confuse the story.
 

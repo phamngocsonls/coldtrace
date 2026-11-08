@@ -376,6 +376,10 @@ func (a *agent) ingest(deviceID string, s ai.Sample) {
 type evalWindow struct {
 	DeviceID string
 	Samples  []ai.Sample
+	// Full is whether the source window had reached capacity at snapshot
+	// time — the classifier may only run on full windows (train/serve
+	// consistency; see ai.Window.Full).
+	Full bool
 }
 
 func (a *agent) snapshotWindows() []evalWindow {
@@ -385,7 +389,7 @@ func (a *agent) snapshotWindows() []evalWindow {
 	for id, w := range a.wins {
 		cp := make([]ai.Sample, len(w.Samples))
 		copy(cp, w.Samples)
-		out = append(out, evalWindow{DeviceID: id, Samples: cp})
+		out = append(out, evalWindow{DeviceID: id, Samples: cp, Full: w.Full()})
 	}
 	return out
 }
@@ -400,7 +404,17 @@ func (a *agent) loop(ctx context.Context) {
 				continue
 			}
 			last := w.Samples[len(w.Samples)-1].TS
-			if now.Sub(last) > 2*time.Minute || len(w.Samples) < 24 {
+			// Stale windows are skipped (device offline / first boot), and so
+			// are PARTIAL ones: the classifier was trained on full windows,
+			// and evaluating a half-filled one is out-of-distribution —
+			// confidently wrong. This bit for real twice: ~30 s after an
+			// AI reset, a ~28-sample window reading a healthy thermostat
+			// coast (compressor resting, temp flat at -18) classified as
+			// compressor_failure at conf 0.998 and opened a false incident,
+			// and earlier a 0.58 power_outage ghost right after a recovery.
+			// Waiting for the full 72 samples (6 min at 5 s) is what makes
+			// the runbook's "wait ~7 min after a reset" rule true by code.
+			if now.Sub(last) > 2*time.Minute || !w.Full {
 				continue
 			}
 			a.evaluate(ctx, w.DeviceID, w.Samples, now)

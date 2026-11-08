@@ -12,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/onemount/coldtrace/internal/aggdb"
 )
 
 // toolDef is the OpenAI function-calling schema for one tool.
@@ -201,9 +203,14 @@ func toolTelemetry(ctx context.Context, db *mongo.Database, deviceID string, win
 		window = 24 * time.Hour
 	}
 	since := time.Now().UTC().Add(-window)
-	cur, err := db.Collection("telemetry").Aggregate(ctx, bson.A{
+	// DedupByTS first: MQTT QoS 1 redelivery writes the same (deviceId, ts)
+	// twice and $setWindowFields hard-errors on repeated sortBy values per
+	// partition — the RCA tool would 500 on a broker blip. The stage
+	// restores ts ordering itself.
+	pipeline := append(bson.A{
 		bson.D{{Key: "$match", Value: bson.M{"meta.deviceId": deviceID, "ts": bson.M{"$gte": since}}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "ts", Value: 1}}}},
+	}, aggdb.DedupByTS()...)
+	pipeline = append(pipeline,
 		bson.D{{Key: "$setWindowFields", Value: bson.D{
 			{Key: "partitionBy", Value: "$meta.deviceId"},
 			{Key: "sortBy", Value: bson.D{{Key: "ts", Value: 1}}},
@@ -242,7 +249,8 @@ func toolTelemetry(ctx context.Context, db *mongo.Database, deviceID string, win
 			{Key: "excursionMs", Value: bson.D{{Key: "$sum", Value: "$exc"}}},
 			{Key: "lastTs", Value: bson.D{{Key: "$max", Value: "$ts"}}},
 		}}},
-	})
+	)
+	cur, err := db.Collection("telemetry").Aggregate(ctx, pipeline)
 	if err != nil {
 		return "", err
 	}

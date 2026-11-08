@@ -262,6 +262,15 @@ explicit timezone** — the audit CSV's "last excursion" column and the tier
 chart's bucket labels both `$dateToString` in `Asia/Ho_Chi_Minh`, while all
 math/comparison stays UTC.
 
+A third, learned the hard way: **every window pipeline deduplicates on
+`(deviceId, ts)` first** (`aggdb.DedupByTS()` — `$group`/`$replaceRoot`/`$sort`).
+MQTT QoS 1 is at-least-once, one broker redelivery writes the same reading
+twice, and `$fill`/`$setWindowFields` REQUIRE a unique sortBy per partition —
+a single duplicated tick 500'd the series chart, the health view and the
+audit until the dedup absorbed it. Time-series collections cannot take unique
+indexes, so the read path owns idempotency (regression test:
+`aggdb.TestDedupByTSFixesWindowPipelines`).
+
 ---
 
 ## 6. Ops notes

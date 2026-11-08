@@ -197,3 +197,29 @@ func TestAnomalyScorer(t *testing.T) {
 		t.Fatalf("expected high anomaly score for +6C shock, got %.2f", score)
 	}
 }
+
+// Window.Full gates evaluation on train/serve window consistency: the
+// classifier only ever saw full-capacity windows, so a partial one is
+// out-of-distribution and confidently wrong (a 28-sample window after an AI
+// reset called a healthy thermostat coast compressor_failure at 0.998).
+func TestWindowFull(t *testing.T) {
+	w := NewWindow("T", 72)
+	if w.Full() {
+		t.Fatal("empty window reports Full")
+	}
+	for i := 0; i < 71; i++ {
+		w.Push(Sample{TS: time.Now().Add(time.Duration(i) * 5 * time.Second), TempC: -18})
+	}
+	if w.Full() {
+		t.Fatal("window at capacity-1 reports Full")
+	}
+	w.Push(Sample{TS: time.Now().Add(72 * 5 * time.Second), TempC: -18})
+	if !w.Full() {
+		t.Fatal("window at capacity does not report Full")
+	}
+	// and it stays full under eviction (rolling window)
+	w.Push(Sample{TS: time.Now().Add(73 * 5 * time.Second), TempC: -18})
+	if !w.Full() || len(w.Samples) != 72 {
+		t.Fatalf("rolling window lost fullness: len=%d full=%v", len(w.Samples), w.Full())
+	}
+}

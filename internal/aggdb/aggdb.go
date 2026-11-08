@@ -13,6 +13,36 @@ import (
 
 const collTelemetry = "telemetry"
 
+// DedupByTS collapses at-least-once MQTT redelivery duplicates (same
+// deviceId + ts) into one document. $setWindowFields/$fill REQUIRE the sortBy
+// field to be unique per partition, and QoS 1 redelivery breaks that
+// invariant — observed live: one broker redelivery tick duplicated six
+// devices' readings and every window pipeline 500'd
+// ("There can be no repeated values in the sort field in the same
+// partition") until this stage ran. Time-series collections cannot take
+// unique indexes, so the read path absorbs the duplicates instead.
+//
+// Redelivered payloads are byte-identical, so $first is deterministic; the
+// trailing $sort re-establishes the ts ordering $group destroys (callers
+// still sort explicitly, which is harmless). Must run AFTER the narrowing
+// $match and BEFORE any $setWindowFields/$fill/$densify.
+func DedupByTS() bson.A {
+	return bson.A{
+		bson.D{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: bson.D{
+				{Key: "deviceId", Value: "$meta.deviceId"},
+				{Key: "ts", Value: "$ts"},
+			}},
+			{Key: "doc", Value: bson.D{{Key: "$first", Value: "$$ROOT"}}},
+		}}},
+		bson.D{{Key: "$replaceRoot", Value: bson.D{{Key: "newRoot", Value: "$doc"}}}},
+		bson.D{{Key: "$sort", Value: bson.D{
+			{Key: "meta.deviceId", Value: 1},
+			{Key: "ts", Value: 1},
+		}}},
+	}
+}
+
 // slopeStage computes per-device °C/minute derivative of temperature
 // (window function, range -5..0 minutes).
 func slopeStage() bson.D {
@@ -105,9 +135,8 @@ func recentStage() bson.D {
 //   - tempAvg5m: 5-minute rolling average via $setWindowFields (window functions)
 //   - slopeCpm: temperature trend °C/minute via $derivative
 func deviceHealthPipeline() bson.A {
-	return bson.A{
-		recentStage(),
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "ts", Value: 1}}}},
+	p := append(bson.A{recentStage()}, DedupByTS()...)
+	return append(p,
 		slopeStage(),
 		avgStage(),
 		bson.D{{Key: "$group", Value: bson.D{
@@ -131,16 +160,15 @@ func deviceHealthPipeline() bson.A {
 			{Key: "samples", Value: 1},
 			{Key: "status", Value: 1},
 		}}},
-	}
+	)
 }
 
 // fleetRollupPipeline counts devices by status. Mirrored in
 // datadog/agent/conf.d/mongo.d/conf.yaml custom_queries so the Agent emits
 // `mongodb.coldchain.fleet.device_count` tagged by status.
 func fleetRollupPipeline() bson.A {
-	return bson.A{
-		recentStage(),
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "ts", Value: 1}}}},
+	p := append(bson.A{recentStage()}, DedupByTS()...)
+	return append(p,
 		slopeStage(),
 		avgStage(),
 		bson.D{{Key: "$group", Value: bson.D{
@@ -160,7 +188,7 @@ func fleetRollupPipeline() bson.A {
 			{Key: "status", Value: "$_id"},
 			{Key: "count", Value: 1},
 		}}},
-	}
+	)
 }
 
 // DeviceHealthRow is one row of GET /devices/health.
@@ -215,10 +243,14 @@ func DeviceSeries(ctx context.Context, coll *mongo.Collection, deviceID string, 
 	const step = 10 * time.Second
 	to := time.Now().UTC().Truncate(step)
 	from := to.Add(-window.Truncate(step))
-	pipeline := bson.A{
+	pipeline := append(bson.A{
 		bson.D{{Key: "$match", Value: bson.D{{Key: "meta.deviceId", Value: deviceID},
 			{Key: "ts", Value: bson.D{{Key: "$gte", Value: from}}}}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "ts", Value: 1}}}},
+		// MQTT QoS 1 is at-least-once: a broker redelivery writes the same
+		// (deviceId, ts) twice and $fill — which requires a unique sortBy per
+		// partition — 500s the whole chart until the duplicates collapse.
+	}, DedupByTS()...)
+	pipeline = append(pipeline,
 		// normalize the field name once: everything downstream uses "temp"
 		bson.D{{Key: "$set", Value: bson.D{
 			{Key: "temp", Value: "$tempC"},
@@ -253,7 +285,7 @@ func DeviceSeries(ctx context.Context, coll *mongo.Collection, deviceID string, 
 			{Key: "ts", Value: bson.D{{Key: "$toString", Value: "$ts"}}},
 			{Key: "temp", Value: 1},
 		}}},
-	}
+	)
 	cur, err := coll.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err

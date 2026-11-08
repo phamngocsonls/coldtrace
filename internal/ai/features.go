@@ -41,6 +41,13 @@ func (w *Window) Push(s Sample) {
 	}
 }
 
+// Full reports whether the window has reached its capacity — the length the
+// classifier was trained on. A partial window is out-of-distribution: the
+// model has never seen one, so its output is confidently wrong (observed
+// live: a 28-sample window right after an AI reset classified a healthy
+// thermostat coast as compressor_failure at 0.998). Evaluation must wait.
+func (w *Window) Full() bool { return len(w.Samples) >= w.max }
+
 // Stale reports whether the window has no recent data.
 func (w *Window) Stale(now time.Time, maxAge time.Duration) bool {
 	if len(w.Samples) == 0 {

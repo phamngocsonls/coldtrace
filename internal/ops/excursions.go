@@ -1,5 +1,4 @@
-// Package ops — excursions.go builds the HACCP-style excursion audit.
-//
+// Package ops — excursions.go builds the HACCP-style excursion audit.//
 // This pipeline lived inline in cmd/ops-api/main.go until the audit called
 // it out: every date operator ran in UTC and nothing was formatted, so the
 // CSV an inspector downloads showed UTC instants — 7 hours off the wall
@@ -18,6 +17,8 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"github.com/onemount/coldtrace/internal/aggdb"
 )
 
 // ExcursionsPipeline aggregates per-device minutes above the -14C at-risk
@@ -26,12 +27,17 @@ import (
 //
 // Read-only by construction (no $merge/$out).
 func ExcursionsPipeline(since time.Time, tz string) bson.A {
-	return bson.A{
+	// DedupByTS: MQTT QoS 1 redelivery writes the same (deviceId, ts) twice,
+	// and $setWindowFields hard-errors on repeated sortBy values per
+	// partition — the audit would 500 on a broker blip. The dedup runs after
+	// the narrowing $match (and restores the ts ordering itself).
+	p := append(bson.A{
 		bson.D{{Key: "$match", Value: bson.M{
 			"ts":    bson.M{"$gte": since},
 			"tempC": bson.M{"$gt": -14},
 		}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "ts", Value: 1}}}},
+	}, aggdb.DedupByTS()...)
+	return append(p,
 		bson.D{{Key: "$setWindowFields", Value: bson.D{
 			{Key: "partitionBy", Value: "$meta.deviceId"},
 			{Key: "sortBy", Value: bson.D{{Key: "ts", Value: 1}}},
@@ -76,7 +82,7 @@ func ExcursionsPipeline(since time.Time, tz string) bson.A {
 			}}}},
 		}}},
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "excursionMin", Value: -1}}}},
-	}
+	)
 }
 
 // ExcursionRow is one aggregated audit line.
