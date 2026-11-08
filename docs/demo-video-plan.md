@@ -202,16 +202,22 @@ continuous chain:
   `minConfidence 0.85` (the same gate that decides whether an incident OPENS
   at all), `maxEtaAlarmMinutes 45`, per-device 30-min cooldown, kill switch.
 
-### Scene 8 — Datadog: the trace chain (7:50–8:45)
+### Scene 8 — Datadog: dashboard → trace chain (7:50–8:45)
 
-> **Dashboard decision (reviewed 2026-11-08):** the custom *"ColdTrace —
-> Cold-chain Fleet Health"* dashboard + 3 monitors are **CUT from the video**
-> — `datadog/apply-datadog.sh` requires `DD_APP_KEY` and `.env` has none, so
-> they were never applied and a recording would show a 404. To enable later:
-> add `DD_APP_KEY` to `.env`, run `./datadog/apply-datadog.sh`, then re-approve
-> this scene. What IS flowing (verified: 0 export errors) and what the video
-> uses instead:
+> **Dashboard status (re-applied 2026-11-08 with a working PAT):** the
+> *"ColdTrace — Cold-chain Fleet Health"* dashboard + 3 monitors are **LIVE**
+> in the org — `./datadog/apply-datadog.sh` pushed them once `.env` carried a
+> valid `DD_APP_KEY` (personal access token). Re-run that script after any
+> `datadog/dashboard.json` change; metrics/logs/traces have been verified
+> flowing with 0 export errors.
 
+- **Show (opener):** the dashboard —
+  `app.ap1.datadoghq.com/dashboard/v9y-45k-jsz` — 10 widgets: temperature by
+  device with the −10/−14 °C threshold markers, AT_RISK/ALARM counters from
+  the Agent's MongoDB custom query, ingest latency + batch sizes, AI
+  decisions by classification, compressor-fail log stream. Say: *"the same
+  story a NOC would pin on the wall — every widget is the pipeline you just
+  watched, in production telemetry."*
 - **Show:** from the incident card → *"Open trace in Datadog"* → APM trace:
   `mqtt.ingest → mongo.write → ai.decision`, one span per decision, with
   `ai.top_factor.*` attributes.

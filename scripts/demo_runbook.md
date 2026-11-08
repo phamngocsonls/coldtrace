@@ -13,12 +13,12 @@ MONGO_URI=mongodb://localhost:27017 go run ./tools/seedhistory     # demo histor
                                                                    # HACCP CSV has rows on day one
 ```
 
-Datadog dashboard + monitors (`./datadog/apply-datadog.sh`) are **optional and
-currently cut** from the demo: applying them requires `DD_APP_KEY`, which
-`.env` does not have, so they were never pushed. Traces, metrics and logs DO
-flow with `DD_API_KEY` alone (verified: 0 export errors) — the demo anchors on
-the APM trace chain + log correlation instead. To enable the dashboard later,
-add `DD_APP_KEY` to `.env` and run the script.
+Datadog dashboard + monitors (`./datadog/apply-datadog.sh`) are **applied and
+live** (needs `DD_API_KEY` + a working `DD_APP_KEY` personal access token in
+`.env`; verified 2026-11-08 — dashboard + 3 monitors up, metrics flowing with
+0 export errors). Re-run the script after editing
+`datadog/dashboard.json`/`monitors.json`. Traces, metrics and logs flow with
+`DD_API_KEY` alone; the PAT is only for authoring.
 
 **Recording a demo video?** Follow `docs/demo-video-plan.md` — scene-by-scene
 storyboard with measured timings, edit tricks to hide detection waits, and

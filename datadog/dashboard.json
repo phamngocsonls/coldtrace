@@ -1,129 +1,210 @@
 {
-  "title": "ColdTrace — Cold-chain Fleet Health",
-  "description": "Fleet health for virtual freezer fleet: temperature by device, fleet status rollup (from the Agent mongo custom_query), compressor-fail counters, ingest pipeline, OTel HTTP APM + AI decisions.",
-  "layout_type": "ordered",
-  "widgets": [
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Temperature by device (°C)",
-        "title_size": "16",
-        "requests": [
-          {
-            "q": "avg:coldchain.device.temp{*} by {device}",
-            "display_type": "line",
-            "style": { "palette": "orange" }
-          }
-        ],
-        "markers": [
-          { "display_type": "error_dash", "value": "y=-10", "label": "ALARM > -10°C" },
-          { "display_type": "warning_dash", "value": "y=-14", "label": "AT_RISK > -14°C" }
-        ]
-      },
-      "layout": { "x": 0, "y": 0, "w": 8, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Devices AT_RISK",
-        "requests": [
-          { "q": "avg:mongodb.coldchain.fleet.device_count{status:at_risk}" }
-        ],
-        "autoscale": false,
-        "custom_format": { "type": "number", "decimal": 0 }
-      },
-      "layout": { "x": 8, "y": 0, "w": 2, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Devices ALARM",
-        "requests": [
-          { "q": "avg:mongodb.coldchain.fleet.device_count{status:alarm}" }
-        ],
-        "autoscale": false,
-        "custom_format": { "type": "number", "decimal": 0 }
-      },
-      "layout": { "x": 10, "y": 0, "w": 2, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Compressor-fail counters by device",
-        "requests": [
-          { "q": "sum:coldchain.device.compressor_fail{*} by {device}.as_count()", "display_type": "bars" }
-        ]
-      },
-      "layout": { "x": 0, "y": 3, "w": 4, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Ingest latency (ms, histogram avg)",
-        "requests": [
-          { "q": "avg:coldchain.ingest.latency{*}" }
-        ]
-      },
-      "layout": { "x": 4, "y": 3, "w": 4, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Telemetry messages ingested (per device)",
-        "requests": [
-          { "q": "sum:coldchain.ingest.messages{*} by {device}.as_rate()", "display_type": "line" }
-        ]
-      },
-      "layout": { "x": 8, "y": 3, "w": 4, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Ingest errors by reason",
-        "requests": [
-          { "q": "sum:coldchain.ingest.errors{*} by {reason}.as_count()", "display_type": "bars" }
-        ]
-      },
-      "layout": { "x": 0, "y": 6, "w": 4, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Compressor power draw by device (W)",
-        "requests": [
-          { "q": "avg:coldchain.device.power_draw{*} by {device}", "display_type": "line" }
-        ]
-      },
-      "layout": { "x": 4, "y": 6, "w": 4, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "log_stream",
-        "title": "compressor_fail events (OTel logs → Log Management)",
-        "query": "service:coldtrace-fleet-simulator status:error",
-        "columns": ["message", "deviceId", "status"]
-      },
-      "layout": { "x": 8, "y": 6, "w": 4, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "distribution",
-        "title": "Gateway HTTP latency — OTel APM (span metrics via datadog connector)",
-        "requests": [
-          { "q": "avg:trace.http.server.duration{service:coldtrace-gateway}" }
-        ]
-      },
-      "layout": { "x": 0, "y": 9, "w": 6, "h": 3 }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "AI decisions by classification (spans: ai.decision)",
-        "requests": [
-          { "q": "sum:trace.ai.decision.hits{service:coldtrace-ai-agent} by {ai.decision}.as_count()", "display_type": "bars" }
-        ]
-      },
-      "layout": { "x": 6, "y": 9, "w": 6, "h": 3 }
+ "title": "ColdTrace — Cold-chain Fleet Health",
+ "description": "Fleet health for virtual freezer fleet: temperature by device, fleet status rollup (from the Agent mongo custom_query), compressor-fail counters, ingest pipeline, OTel HTTP APM + AI decisions.",
+ "layout_type": "ordered",
+ "widgets": [
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "Temperature by device (°C)",
+    "title_size": "16",
+    "requests": [
+     {
+      "q": "avg:coldchain.device.temp{*} by {device}",
+      "display_type": "line",
+      "style": {
+       "palette": "orange"
+      }
+     }
+    ],
+    "markers": [
+     {
+      "display_type": "error_dash",
+      "value": "y=-10",
+      "label": "ALARM > -10°C"
+     },
+     {
+      "display_type": "warning_dash",
+      "value": "y=-14",
+      "label": "AT_RISK > -14°C"
+     }
+    ]
+   },
+   "layout": {
+    "x": 0,
+    "y": 0,
+    "w": 8,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "query_value",
+    "title": "Devices AT_RISK",
+    "requests": [
+     {
+      "q": "avg:mongodb.coldchain.fleet.device_count{status:at_risk}"
+     }
+    ],
+    "autoscale": false,
+    "custom_format": {
+     "type": "number",
+     "decimal": 0
     }
-  ]
+   },
+   "layout": {
+    "x": 8,
+    "y": 0,
+    "w": 2,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "query_value",
+    "title": "Devices ALARM",
+    "requests": [
+     {
+      "q": "avg:mongodb.coldchain.fleet.device_count{status:alarm}"
+     }
+    ],
+    "autoscale": false,
+    "custom_format": {
+     "type": "number",
+     "decimal": 0
+    }
+   },
+   "layout": {
+    "x": 10,
+    "y": 0,
+    "w": 2,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "Compressor-fail counters by device",
+    "requests": [
+     {
+      "q": "sum:coldchain.device.compressor_fail{*} by {device}.as_count()",
+      "display_type": "bars"
+     }
+    ]
+   },
+   "layout": {
+    "x": 0,
+    "y": 3,
+    "w": 4,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "Ingest latency (ms, histogram avg)",
+    "requests": [
+     {
+      "q": "avg:coldchain.ingest.latency{*}"
+     }
+    ]
+   },
+   "layout": {
+    "x": 4,
+    "y": 3,
+    "w": 4,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "Telemetry messages ingested (per device)",
+    "requests": [
+     {
+      "q": "sum:coldchain.ingest.messages{*} by {device}.as_rate()",
+      "display_type": "line"
+     }
+    ]
+   },
+   "layout": {
+    "x": 8,
+    "y": 3,
+    "w": 4,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "Ingest errors by reason",
+    "requests": [
+     {
+      "q": "sum:coldchain.ingest.errors{*} by {reason}.as_count()",
+      "display_type": "bars"
+     }
+    ]
+   },
+   "layout": {
+    "x": 0,
+    "y": 6,
+    "w": 4,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "Compressor power draw by device (W)",
+    "requests": [
+     {
+      "q": "avg:coldchain.device.power_draw{*} by {device}",
+      "display_type": "line"
+     }
+    ]
+   },
+   "layout": {
+    "x": 4,
+    "y": 6,
+    "w": 4,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "log_stream",
+    "title": "compressor_fail events (OTel logs → Log Management)",
+    "query": "service:coldtrace-fleet-simulator status:error",
+    "columns": [
+     "message",
+     "deviceId",
+     "status"
+    ]
+   },
+   "layout": {
+    "x": 8,
+    "y": 6,
+    "w": 4,
+    "h": 3
+   }
+  },
+  {
+   "definition": {
+    "type": "timeseries",
+    "title": "AI decisions by classification (spans: ai.decision)",
+    "requests": [
+     {
+      "q": "sum:trace.ai.decision.hits{service:coldtrace-ai-agent} by {ai.decision}.as_count()",
+      "display_type": "bars"
+     }
+    ]
+   },
+   "layout": {
+    "x": 0,
+    "y": 9,
+    "w": 12,
+    "h": 3
+   }
+  }
+ ]
 }
