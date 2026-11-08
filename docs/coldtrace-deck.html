@@ -437,7 +437,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
         <div class="what"><div class="tt">Compressor chết trên FZ-005</div><div class="td">sự cố inject qua MQTT thật · nhiệt bắt đầu tăng</div></div>
       </div>
       <div class="row warn">
-        <div class="when">T+~150s</div>
+        <div class="when">T+148–255s</div>
         <div class="what"><div class="tt"><span class="amber">PHÁT HIỆN</span> — slope +0.18 °C/min, AT_RISK</div><div class="td">ai-agent phân loại <code>compressor_failure</code> conf ≥0.97 · incident OPEN</div></div>
       </div>
       <div class="row">
@@ -446,14 +446,14 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
       <div class="row">
         <div class="when">XỬ LÝ</div>
-        <div class="what"><div class="tt">Policy đạt → <code>compressor_restart</code> qua MQTT</div><div class="td">conf ≥ 0.85 · ETA ≤ 45 min · class đã được duyệt → ACK ~12 ms</div></div>
+        <div class="what"><div class="tt">Policy đạt → <code>compressor_restart</code> qua MQTT</div><div class="td">conf ≥ 0.85 · ETA ≤ 45 min · class đã được duyệt → ACK 0–38 ms</div></div>
       </div>
       <div class="row ok">
-        <div class="when">T+15s</div>
+        <div class="when">ACK 0–38 ms</div>
         <div class="what"><div class="tt"><span class="green">HỒI PHỤC</span> — thiết bị OK</div><div class="td">slope ≈ 0 · nhiệt về -18 °C · verify_recovery.sh xác nhận</div></div>
       </div>
       <div class="row ok">
-        <div class="when">~6 phút</div>
+        <div class="when">T+91–373s</div>
         <div class="what"><div class="tt"><span class="green">TỰ ĐÓNG</span> — incident RESOLVED</div><div class="td"><code>system:recovery</code> sau 60s khỏe mạnh · Datadog fleet monitor Alert → OK · preflight 12/12 OK</div></div>
       </div>
     </div>
@@ -630,7 +630,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
 
 <div id="hud">
   <button id="prev" aria-label="Slide trước">←</button>
-  <span id="count">1 / 13</span>
+  <span id="count">1 / 14</span>
   <button id="next" aria-label="Slide sau">→</button>
   <button id="full" title="Toàn màn hình">⛶</button>
   <button id="print" title="In / Export PDF">⤓ PDF</button>
