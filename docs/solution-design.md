@@ -109,6 +109,11 @@ tail or loosened past the slowest fault.
 
 ## 3. Data model (MongoDB `coldtrace`)
 
+> Full per-collection schema reference — every document shape, index and
+> **why it exists**, the time-series/tiering design, the `$jsonSchema`
+> validator, and the query-pattern → index mapping: see
+> **`docs/mongodb-data-model.md`**. This section is the narrative summary.
+
 | Collection | Type | Written by | Purpose |
 |---|---|---|---|
 | `telemetry` | **Time Series** (`metaField: meta` = `{deviceId, site, zone}`, `granularity: minutes`, TTL 24 h) | gateway | readings; window pipelines run here. `meta` holds only fixed labels, so `{"meta.site": …}` skips whole buckets. Written in batches via `insertMany` + `{ordered:false}`. |

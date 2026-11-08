@@ -1,6 +1,6 @@
 # ColdTrace — Demo Video Plan
 
-A complete production plan for a **6–8 minute product demo video**: what to
+A complete production plan for a **10-minute product demo video**: what to
 record, in which order, what to say, and how to hide the boring parts. Every
 timing below was **measured live** on this stack (not estimated), and every
 scene has a fallback so a single hiccup cannot sink the recording.
@@ -80,19 +80,21 @@ State to confirm before recording:
 
 ## 3. Storyboard (scene by scene)
 
-Total runtime target: **6:30–8:00**. Real detection waits are hidden with
-**cuts** (see §5), so wall-clock recording is ~35 min for a ~7 min video.
+Total runtime target: **10:00** (ten scenes). Real detection waits are hidden
+with **cuts** (see §5), so wall-clock recording stays ~40 min for the 10 min
+video.
 
-### Scene 1 — The problem (0:00–0:25) *no live stack needed*
+### Scene 1 — The problem (0:00–0:40) *no live stack needed*
 
 - **Show:** `docs/screenshots` or the deck's opening: freezer warms −18 →
-  −14 → −10 while nobody watches.
+  −14 → −10 while nobody watches. One stat on screen: *"FZ-010 holds $25k of
+  vaccines — the spoilage line is −10 °C."*
 - **Say:** the pitch from §0. End on: *"This is ColdTrace. Let me kill a
   compressor and watch it handle it."*
 - Why first: judges decide in the first 30 s whether the rest is worth
   watching. A dead freezer is the whole business case.
 
-### Scene 2 — Fleet Overview (0:25–1:00)
+### Scene 2 — Fleet Overview + the status ladder (0:40–1:30)
 
 - **Show:** console `/` — 12 green tiles, KPI strip, Sites rollup, the live
   event feed ticking (SSE, not polling).
@@ -102,12 +104,33 @@ Total runtime target: **6:30–8:00**. Real detection waits are hidden with
   streams — no refresh, no polling."*
 - **Proof moment:** point at a tile's temperature updating every 5 s.
 
-### Scene 3 — Kill a freezer: detection (1:00–2:30) ⭐ core scene
+### Scene 3 — MongoDB under the hood (1:30–2:20) ⭐ sponsor scene
+
+- **Show:** device detail page → the **History chart**, then flip the tier
+  switch **hourly → daily** and let the chart re-render (7 d of hourly
+  buckets, then 3 weeks of daily). Optional split-screen with
+  `docs/mongodb-data-model.md` §1 (the ownership diagram).
+- **Say (the Mongo story in 50 s):** *"Every reading lands in a MongoDB
+  time-series collection — metaField holds the device labels so a site
+  filter skips whole buckets. Raw readings TTL out at 24 h, but `$merge`
+  rollups keep hourly for 7 days and daily for a year — that chart you just
+  saw flip is reading the ROLLOUPS, bucketed in local time, not raw data.
+  The live grid is change streams: one oplog tail, no polling. And the
+  registry is `$jsonSchema`-validated — a malformed device can't even be
+  written."*
+- This is the scene that answers "why MongoDB" — time series + tiering +
+  change streams + schema validation in one continuous shot.
+
+### Scene 4 — Kill a freezer: detection (2:20–4:00) ⭐ core scene
 
 - **Do:** terminal: `POST /api/demo/inject {"deviceId":"FZ-006","fault":"power_outage"}`
   — or use the Demo drawer in the console (same thing, more visual).
-- **Wait ~3–4 min** → **CUT** (see §5) → return when the incident is OPEN.
-- **Show:** Incidents page: the new card.
+- **While it warms (~90 s on camera):** narrate the wait — *"the classifier
+  is watching a 6-minute sliding window; 13 features; it needs ~3 minutes of
+  fault physics before it will commit."* Optionally show the fleet grid
+  going AT_RISK on FZ-6.
+- **CUT** (see §5) → return when the incident is OPEN. **Show:** Incidents
+  page: the new card.
   - `faultClass: power_outage`, `confidence: 1.00`
   - `decision: PROPOSED` — *"first incident of this class — awaiting human
     approval"* ← **say this out loud: the AI does NOT act without permission**
@@ -118,7 +141,7 @@ Total runtime target: **6:30–8:00**. Real detection waits are hidden with
   outage at full confidence — but it's the first of its kind, so ColdTrace
   proposes, it doesn't act. Human in the loop by design."*
 
-### Scene 4 — Explain: LLM root-cause + memory (2:30–3:30) ⭐ AI scene
+### Scene 5 — Explain: LLM root-cause + memory (4:00–5:00) ⭐ AI scene
 
 Two panels on the incident page, in this order:
 
@@ -132,10 +155,10 @@ Two panels on the incident page, in this order:
    *"99.6% — same failure signature as FZ-012 last week"*. Say: *"The agent
    has memory. It recognized this pattern."*
 
-3. **Trace link**: click *"Open trace in Datadog"* — jump to Scene 6 or open
+3. **Trace link**: click *"Open trace in Datadog"* — jump to Scene 8 or open
    in a new tab for later.
 
-### Scene 5 — Approve → AUTO-remediate → AUTO-RESOLVE (3:30–5:00) ⭐⭐ the climax
+### Scene 6 — Approve → AUTO-remediate → AUTO-RESOLVE (5:00–6:40) ⭐⭐ the climax
 
 This is the money scene — the full closed loop, and it must be shown as ONE
 continuous chain:
@@ -156,11 +179,12 @@ continuous chain:
      `resolvedBy: system:recovery`** — *"no human clicked anything. After
      60 seconds of provably healthy telemetry the agent closes its own
      incident. Detect → act → RECOVER → learn."*
-- Optional kicker: `POST /api/incidents/{id}/feedback {"resolvedClass":"compressor_failure"}`
+- Kicker (do not skip — it's the learn half of the loop):
+  `POST /api/incidents/{id}/feedback {"resolvedClass":"compressor_failure"}`
   → `"learned": true`, agent logs `ai_learned trainSamples: 801` — *"and it
   just learned from this episode."*
 
-### Scene 6 — Guardrail: the fleet circuit breaker (5:00–6:00) ⭐ trust scene
+### Scene 7 — Guardrail: the fleet circuit breaker (6:40–7:50) ⭐ trust scene
 
 - **Do:** inject `compressor_failure` on **two devices at once**
   (`FZ-004` + `FZ-005`).
@@ -178,7 +202,7 @@ continuous chain:
   `minConfidence 0.85` (the same gate that decides whether an incident OPENS
   at all), `maxEtaAlarmMinutes 45`, per-device 30-min cooldown, kill switch.
 
-### Scene 7 — Datadog: the trace chain (6:00–6:45)
+### Scene 8 — Datadog: the trace chain (7:50–8:45)
 
 > **Dashboard decision (reviewed 2026-11-08):** the custom *"ColdTrace —
 > Cold-chain Fleet Health"* dashboard + 3 monitors are **CUT from the video**
@@ -196,22 +220,25 @@ continuous chain:
   database to the AI decision — this is the audit chain a food-safety
   inspector would demand."*
 
-### Scene 8 — Compliance close (6:45–7:15)
+### Scene 9 — Compliance close + model health (8:45–9:30)
 
 - **Show:** Compliance page → export the HACCP CSV:
   `FZ-009, 19.1 min above −14 °C, worst −11.5, 2026-11-08 06:34 (local ICT)`
   — *"minutes above threshold computed from actual sample deltas, the last
   excursion in the auditor's timezone — this is the document that goes in
   the HACCP binder."*
-- Optional 15 s: Model Health card (100% accuracy, 1,100 fresh windows, clean
-  confusion matrix) + Events page (the full audit trail you just created).
+- **20 s:** Model Health card (100% accuracy, 1,100 fresh windows, clean
+  confusion matrix) — *"scored on windows rendered from the same simulator
+  physics the fleet runs on — measured, not stored."*
+- **10 s:** Events page — the full audit trail you just created on camera.
 
-### Scene 9 — Outro (7:15–7:45)
+### Scene 10 — Outro (9:30–10:00)
 
 - **Say:** *"Detect in minutes, explain itself, act inside guardrails, prove
   recovery, close the audit trail. That's ColdTrace."* + repo/QR if wanted.
 
 ---
+
 
 ## 4. What the AI actually does (the capability map — use as B-roll/narration)
 
@@ -241,7 +268,7 @@ auto-resolve needs another ~2–3 min. Never make the viewer watch that.
 | **Hard cut + clock overlay** | Cut inject → incident. Overlay "T+3:10" text (OBS text or CapCut sticker) so the cut is honest |
 | **Speed ramp** | 8–12× time-lapse of the fleet grid while the tile warms — shows the physics AND keeps pace |
 | **Narration over the cut** | Explain the status ladder / guardrails while the time-lapse plays |
-| **Scene 5 is the only long one** | The AUTO→ACKED→recover→RESOLVED chain needs ~5 min real time; record it in one take with a 10× ramp, then trim |
+| **Scene 6 is the only long one** | The AUTO→ACKED→recover→RESOLVED chain needs ~5 min real time; record it in one take with a 10× ramp, then trim |
 
 ---
 
@@ -266,15 +293,15 @@ hours. Record in this sequence instead, then cut into scene order:
 | Step | Record (wall clock) | Becomes scene |
 |---|---|---|
 | 1 (T+0) | `demo_cleanup.sh` → `demo_preflight.sh` on camera (12/12 green) — then **start the 7-min warm-up timer and record Scene 1 + Scene 2 narration** | 1, 2 |
-| 2 (T+7) | Inject `power_outage` FZ-006 → **immediately record the AI-Control / guardrails walkthrough** while it warms | 6 (guardrails half) |
-| 3 (T+11) | FZ-006 opens → record the incident card, topFactors, **Explain → RCA**, similar-incidents, PROPOSED reason | 3, 4 |
-| 4 (T+15) | Inject `compressor_failure` FZ-002 (class already approved) → record the fleet grid AT_RISK/ALARM transition narration | 2 (transition), 5 setup |
-| 5 (T+19) | AUTO card appears → record decision/gates → **Commands: QUEUED→SENT→ACKED ~12 ms** → tile recovers | 5 |
-| 6 (T+24) | **Keep rolling through the auto-resolve** (2–3 min — speed-ramp it later) → `system:recovery` flips the card → feedback → `learned: true` | 5 (the close of the loop) |
-| 7 (T+27) | Inject FZ-004 **and** FZ-005 → record the Events/Compliance walkthrough while they warm | 8 |
-| 8 (T+31) | Both open → record FZ-004 AUTO vs FZ-005 **HOLD latched** (+ one beat showing FZ-005 still HOLD after FZ-004 resolves) | 6 |
-| 9 (T+35) | From an incident card → **Open trace in Datadog** → span chain + log correlation by trace_id | 7 |
-| 10 (T+38) | Compliance page → CSV export (seeded FZ-009 row) → Model Health (100%, 1,100 windows) → outro narration | 8, 9 |
+| 2 (T+7) | Inject `power_outage` FZ-006 → **while it warms, record Scene 3** (History tier flip + Mongo story — needs no fault) **and the AI-Control guardrails walkthrough** | 3, 7 (guardrails half) |
+| 3 (T+11) | FZ-006 opens → record the incident card, topFactors, **Explain → RCA**, similar-incidents, PROPOSED reason | 4, 5 |
+| 4 (T+15) | Inject `compressor_failure` FZ-002 (class already approved) → record the fleet grid AT_RISK/ALARM transition narration | 2 (transition), 6 setup |
+| 5 (T+19) | AUTO card appears → record decision/gates → **Commands: QUEUED→SENT→ACKED ~12 ms** → tile recovers | 6 |
+| 6 (T+24) | **Keep rolling through the auto-resolve** (2–3 min — speed-ramp it later) → `system:recovery` flips the card → feedback → `learned: true` | 6 (the close of the loop) |
+| 7 (T+27) | Inject FZ-004 **and** FZ-005 → record the Events/Compliance walkthrough while they warm | 9 |
+| 8 (T+31) | Both open → record FZ-004 AUTO vs FZ-005 **HOLD latched** (+ one beat showing FZ-005 still HOLD after FZ-004 resolves) | 7 |
+| 9 (T+35) | From an incident card → **Open trace in Datadog** → span chain + log correlation by trace_id | 8 |
+| 10 (T+38) | Compliance page → CSV export (seeded FZ-009 row) → Model Health (100%, 1,100 windows) → outro narration | 9, 10 |
 | 11 (T+40) | `demo_cleanup.sh` + `demo_preflight.sh` again if you need pickup takes — **but re-wait 7 min before any new inject** | pickups |
 
 Why this order works: every inject happens with warm windows; every wait is

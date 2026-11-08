@@ -65,12 +65,14 @@ Open the console: **http://localhost:3301**
 |---|---|---|---|
 | 1 | **This page** | 5 min | Product story, setup, tour, cheat sheet |
 | 2 | `docs/solution-design.md` | 15 min | The thinking: status ladder, the AI layer (13 features, warm start, guardrails), Mongo showcase queries, the incident document |
-| 3 | `scripts/demo_runbook.md` | 5 min | Bring-up, pre-flight, the 10-minute stage script with **measured** timings |
-| 4 | `docs/demo-video-plan.md` | 5 min | The 9-scene video storyboard, what to say, how to hide detection waits, fallbacks |
-| 5 | `docs/solution-architecture.md` | skim | Request flows + Mongo/Datadog mapping per endpoint (reference, not linear reading) |
+| 3 | `docs/mongodb-data-model.md` | 10 min | **Every collection**: document shape, indexes + why, the time-series/tiering design, validator, query→index mapping |
+| 4 | `scripts/demo_runbook.md` | 5 min | Bring-up, pre-flight, the 10-minute stage script with **measured** timings |
+| 5 | `docs/demo-video-plan.md` | 5 min | The **10-scene / 10-minute** video storyboard, what to say, how to hide detection waits, fallbacks |
+| 6 | `docs/solution-architecture.md` | skim | Request flows + Mongo/Datadog mapping per endpoint (reference, not linear reading) |
 
 If you only read two: this page + the **video plan §4 (what the AI does)** —
-that table is the product knowledge you need on camera.
+that table is the product knowledge you need on camera. If a judge asks
+"show me your data model": open `docs/mongodb-data-model.md` and scroll.
 
 ---
 
