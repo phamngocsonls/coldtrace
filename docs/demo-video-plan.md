@@ -198,6 +198,15 @@ continuous chain:
   quietly flip to AUTO — the hold stands until the episode is resolved."*
   (This latched-HOLD is pinned by a regression test — it bit for real in
   rehearsal.)
+- **The on-call beat (~20 s, the resolution of the held incident):** with
+  FZ-005 held, the human finishes it — **ACK** the incident → **dispatch
+  technician** (console Remediate; `technician_dispatched` event,
+  `issuedBy: sre-console`) → the device is fixed on site, and after 60 s
+  provably healthy the agent **auto-resolves** it (`system:recovery`) —
+  the operator's dispatch is in the trail. **Say:** *"The breaker didn't
+  just stop the AI — it handed the job to a human. One ack, one dispatch,
+  same audit trail. That's the whole resolution story: three paths — AUTO,
+  on-call, escalate — one door."*
 - Mention the other guardrails while on the AI Control page:
   `minConfidence 0.85` (the same gate that decides whether an incident OPENS
   at all), `maxEtaAlarmMinutes 45`, per-device 30-min cooldown, kill switch.
@@ -261,6 +270,84 @@ continuous chain:
 | 9 | **Prove recovery**: 60 s healthy streak → auto-resolve `system:recovery` | Scene 5 ⭐ |
 | 10 | **Learn**: operator feedback → `Learn()` retrains, `trainSamples: 801` | Scene 5 kicker |
 | 11 | **Full-chain tracing**: one `traceId` broker → DB → decision → Datadog | Scene 7 |
+| 12 | **Handle its own failure** ⭐: a refused restart (device acks `ok:false`) → retry after backoff → escalate to on-call with a pre-drafted page — never loops, never sits quiet | Scene 7 B-roll / Q&A |
+
+### The fault signatures — why "temperature change speed" IS the classifier
+
+Each fault class has a characteristic ramp (`internal/sim/device.go`), and
+the model's dominant features are all speed features (`trend_lag_cpm`,
+`net_trend_cpm`, `slope_cpm` — the top weights on any real decision):
+
+| Fault class | Temp-speed signature | What finishes the discrimination | Remote fix? |
+|---|---|---|---|
+| `compressor_failure` | **+0.3 °C/min** ramp | compressor stops, power draw present | ✅ `compressor_restart` |
+| `door_left_open` | **+0.1 °C/min** ramp | `doorOpen: true`, compressor pulling hard | ❌ staff close it |
+| `sensor_drift` | **−0.25 °C/min** *reported* (sensor under-reads) | compressor normal, neighbours cold | ❌ replace probe |
+| `power_outage` | warm ramp ≈ compressor's | **power draw zero** — everything dead | ❌ restore power on site |
+| healthy | ±~1.4 °C thermostat sawtooth | no sustained ramp, full window | — |
+
+**Narration line:** *"Every failure has a fingerprint in how fast — and how
+honestly — the temperature moves. Speed alone splits three classes; the
+other two need the cross-signals, and `etaAlarmMin` is just
+`(alarm − temp) / ramp` — the model doing division so it can tell you
+there's time to act."*
+
+### The resolution playbook — the three action paths you demo
+
+The video's through-line is RESOLUTION: something breaks → one of three
+actions fixes it. Every path leaves the same audit trail (commands +
+events), which is the point: **AI and humans act through one door.**
+
+| Path | When | Decision | The action (demo this) | Audit evidence on camera |
+|---|---|---|---|---|
+| **A — AUTO** *(restart)* | approved class + conf ≥ 0.85 + ETA ≤ 45 + breaker clear | `AUTO` | AI issues `compressor_restart` itself → device ACKED ~12 ms → temp pulls down → 60 s healthy streak | `QUEUED→SENT→ACKED`, `remediatedBy: ai-agent`, `resolvedBy: system:recovery` |
+| **B — ON-CALL** *(human dispatch)* | unapproved class, or first-of-kind, or ETA > 45 | `HOLD` / `PROPOSED` | Operator **ACKs** → **dispatches technician** (console Remediate → `technician_dispatched`) → device fixed on site → recovery | `acknowledged: true`, event `technician_dispatched`, command `issuedBy: sre-console`, resolve + `feedback` |
+| **C — ESCALATE** *(breaker)* | ≥2 devices faulting at once | `HOLD` (latched per episode) | Autonomy suspended → human reviews the fleet → acts per device | `circuitBreaker: true`, "repeat actions blocked by cooldown" |
+
+Exact calls for path B (the one that needs a human):
+
+```bash
+INCIDENT_ID=<from the incident card>
+curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/ack -H 'X-Operator: on-call'  # take it (no body)
+curl -X POST localhost:8099/devices/FZ-005/remediate                               # dispatch technician (no body)
+# …device fixed on site, temp recovers. After 60 s provably healthy the agent
+#   AUTO-RESOLVES it (resolvedBy system:recovery) — or close it yourself, no body:
+curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/resolve -H 'X-Operator: on-call'
+curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/feedback \
+     -H 'Content-Type: application/json' -d '{"resolvedClass":"door_left_open"}'   # → learned: true
+```
+
+**Say:** *"When the AI can act, it acts — and shows the receipt. When it
+can't, a human is on-call: one ack, one dispatch, the same audit trail.
+Three paths, one door, nothing happens off the record."*
+
+### Path A′ — when AUTO itself fails (the agentic-failure scene)
+
+The restart is a command, and commands can be **refused by the device** —
+a latched thermal overload (`compressor_failure_hard`) acks `ok:false` and
+the fault STANDS. The agent does not loop and does not sit on
+"awaiting recovery":
+
+1. restart #1 → **REFUSED** (command `FAILED`, device ack in `ackDetail`)
+2. 30 s backoff → **retry #2** → REFUSED again
+3. → **ESCALATED to on-call**: incident gets `escalated: true` +
+   `escalationNote` (class, confidence, ETA, the refusal, the manual
+   action, the closest past episode) and the audit log gets a
+   **critical** `incident_escalated` page. A human power-cycles the
+   controller (`reboot`) — the exact action the note prescribes.
+
+```bash
+curl -X POST localhost:8092/api/demo/inject -H 'Content-Type: application/json' \
+     -d '{"deviceId":"FZ-005","fault":"compressor_failure_hard"}'      # the failure that fights back
+# …detect → AUTO → restart REFUSED → retry → REFUSED → ESCALATED (~1 min after detect)
+curl -X POST localhost:8092/api/devices/FZ-005/commands -H 'Content-Type: application/json' \
+     -H 'X-Operator: on-call' -d '{"action":"reboot"}'                 # the human fix the page prescribed
+```
+
+**Say:** *"The AI tried twice, then did what a good SRE does: stopped,
+paged a human, and wrote down everything they'd need — the class, the
+confidence, how long until damage, what the device said, and the fix.
+Escalation isn't failure of the system; it's the system working."*
 
 ---
 
@@ -305,7 +392,7 @@ hours. Record in this sequence instead, then cut into scene order:
 | 5 (T+19) | AUTO card appears → record decision/gates → **Commands: QUEUED→SENT→ACKED ~12 ms** → tile recovers | 6 |
 | 6 (T+24) | **Keep rolling through the auto-resolve** (2–3 min — speed-ramp it later) → `system:recovery` flips the card → feedback → `learned: true` | 6 (the close of the loop) |
 | 7 (T+27) | Inject FZ-004 **and** FZ-005 → record the Events/Compliance walkthrough while they warm | 9 |
-| 8 (T+31) | Both open → record FZ-004 AUTO vs FZ-005 **HOLD latched** (+ one beat showing FZ-005 still HOLD after FZ-004 resolves) | 7 |
+| 8 (T+31) | Both open → record FZ-004 AUTO vs FZ-005 **HOLD latched** (+ one beat showing FZ-005 still HOLD after FZ-004 resolves) → then the **on-call close**: ACK FZ-005 → dispatch technician (console Remediate) → recovery → `system:recovery` | 7 |
 | 9 (T+35) | From an incident card → **Open trace in Datadog** → span chain + log correlation by trace_id | 8 |
 | 10 (T+38) | Compliance page → CSV export (seeded FZ-009 row) → Model Health (100%, 1,100 windows) → outro narration | 9, 10 |
 | 11 (T+40) | `demo_cleanup.sh` + `demo_preflight.sh` again if you need pickup takes — **but re-wait 7 min before any new inject** | pickups |
@@ -318,12 +405,23 @@ wait) records last so a failure there doesn't sink earlier scenes.
 
 ## 8. Record-of-truth: numbers to quote (measured this rehearsal)
 
-- Detection: **148–229 s** warm windows, **387 s** from a cold window
-- Confidence at detection: **0.93–1.00**
-- Command ACK latency: **0–12 ms**
-- Auto-resolve: **~91–182 s** after remediation (`system:recovery`)
+- Detection: **148–255 s** warm windows, **387 s** from a cold window
+  (FZ-002/011 today: 243–255 s post-fix)
+- Confidence at detection: **0.90–1.00** (FZ-002 0.908 / ETA 44.8 min —
+  gate-relevant; FZ-011 0.995 / ETA 34.8)
+- Command ACK latency: **0–12 ms** (re-verified after the ops-api
+  reconnect fix — a forced broker restart no longer rots commands to
+  TIMEOUT; `set_fault` ACKED 0 ms across the reset)
+- Auto-resolve: **~91–373 s** after remediation (`system:recovery`)
+- Agentic failure handling: hard restart **refused → retry after 30 s
+  backoff → refused → escalated** in under ~90 s from detection, with the
+  pre-drafted `escalationNote` + critical `incident_escalated` event —
+  then the on-call `reboot` (exactly what the note prescribed) closes it
 - Circuit breaker: FZ-004 AUTO + FZ-005 **HOLD latched** — verified it does
   NOT flip when FZ-004 resolves
+- On-call path (path B): `incident_ack` → `technician_dispatched` → device
+  fix → `system:recovery` — the full human-resolution audit chain, verified
+  end-to-end
 - Model eval: **100%**, 1,100 fresh simulator windows, 5 classes
 - Compliance CSV: 19.1 min excursion, worst −11.5 °C, local-time column
 - Preflight: **12/12 checks green** before every recording session

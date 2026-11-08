@@ -179,8 +179,42 @@ confidence, etaAlarmMin (nil when no rising path — never NaN),
 features (13-dim normalized), decision (PROPOSED|AUTO|HOLD), reason,
 similar[] (deviceId/faultClass/score/openedAt — camelCase BSON keys),
 circuitBreaker (latched fleet-breaker flag), status (OPEN|RESOLVED),
-remediatedAt/remediatedBy, resolvedAt/resolvedBy, openedAt, traceId,
-topFactors[], rca{}, acknowledged, seeded (history seeds only)`.
+remediatedAt/remediatedBy, escalated/escalatedAt/escalationNote
+(agentic failure handling: set when the DEVICE refused the auto-restart
+twice — the note is the pre-drafted on-call page), resolvedAt/resolvedBy,
+openedAt, traceId, topFactors[], rca{}, acknowledged, seeded (history
+seeds only)`.
+
+**Where those numbers come from — each fault class has a speed fingerprint.**
+The classifier's dominant features are all temperature-change speed
+(`trend_lag_cpm`, `net_trend_cpm`, `slope_cpm`), and each simulated fault
+has a characteristic ramp (`internal/sim/device.go`):
+
+| Fault class | Temp-speed signature | Corroborating signal | Remote fix? | Policy treatment |
+|---|---|---|---|---|
+| `compressor_failure` | **+0.3 °C/min** ramp (`failRampCPM`) | compressor stops, power draw present | ✅ `compressor_restart` | approved → AUTO within gates |
+| `door_left_open` | **+0.1 °C/min** ramp (`doorRampCPM`) | `doorOpen: true`, compressor pulling hard | ❌ staff must close it | HOLD → on-call |
+| `sensor_drift` | **−0.25 °C/min** *reported* (`driftCPM`, sensor under-reads) | compressor normal, neighbours cold | ❌ replace the probe | HOLD → on-call |
+| `power_outage` | warm ramp ≈ compressor's | **power draw zero** — everything dead | ❌ restore power on site | HOLD → on-call |
+| healthy | ±~1.4 °C thermostat sawtooth, no sustained ramp | full-window discipline | — | evaluation skipped until the window is full |
+
+Two confusions pure speed cannot split (why the 13-dim features also carry
+power draw / compressor state / door state / neighbours): `power_outage`
+ramps warm at nearly the compressor's rate — only the zero power draw
+separates them, and restarting a compressor during an outage would be
+confidently wrong; and `sensor_drift` moves the *reported* temp **down**,
+which any "getting colder = good" rule blesses while food spoils at real
+temperature. `etaAlarmMin` is the speed put to work: `(alarm − temp) / ramp`
+— the ETA gate (`maxEtaAlarmMinutes`) is what decides there is time to act.
+
+**The variant that fights back:** `compressor_failure_hard` (sim-only) is
+telemetry-identical to `compressor_failure` — the classifier never sees a
+difference — but the device REFUSES `compressor_restart` (ack `ok:false`,
+"thermal overload latched") until a human power-cycles the controller
+(`reboot`). It exists to exercise agentic failure handling: refused start →
+one retry after 30 s backoff → **escalation** (`escalated*` fields on the
+incident + `auto_remediation_retry`/`incident_escalated` events) → the
+human runs the `reboot` the note prescribes → recovery auto-resolves.
 
 Indexes: `{openedAt: -1}` (the incident list is newest-first) and
 `{deviceId: 1, faultClass: 1, status: 1}` — the dedup lookup ("one OPEN episode
@@ -205,9 +239,14 @@ operator actions leave identical trails.
 
 ### `events` — the unified audit log (all services)
 
-`type (device_fault|command_*|ai_*|approval|operator|recovery|demo_*),
-deviceId?, message, actor (ai-agent|operator:*|system|device), commandId?,
-incidentId?, severity? (info|warning|critical), data?, at, expiresAt`.
+`type (device_fault|command_*|ai_*|approval|operator|recovery|demo_*|
+auto_remediation_retry|incident_escalated), deviceId?, message, actor
+(ai-agent|operator:*|system|device), commandId?, incidentId?, severity?
+(info|warning|critical), data?, at, expiresAt`. The last two types are the
+agentic failure-handling arc: `auto_remediation_retry` (warning) when the
+agent re-attempts a refused restart, `incident_escalated` (critical) when
+it gives up autonomously and pages the on-call human with the pre-drafted
+context.
 
 Indexes: `{at: -1}` (feed), `{type, at}`, `{deviceId, at}` (filterable pages),
 **TTL index on `{expiresAt: 1}`** — the only value-driven expiry: the feed

@@ -38,6 +38,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onemount/coldtrace/internal/ai"
+	"github.com/onemount/coldtrace/internal/ops"
 	"github.com/onemount/coldtrace/internal/otlp"
 )
 
@@ -62,10 +63,18 @@ type incidentDoc struct {
 	// CircuitBreaker pins an episode that tripped the fleet breaker. Without
 	// it the decision flipped back to AUTO as soon as another device
 	// recovered, auto-remediating the very incident the breaker had held.
-	CircuitBreaker bool           `bson:"circuitBreaker,omitempty" json:"circuitBreaker,omitempty"`
-	Status         string         `bson:"status"            json:"status"` // OPEN|RESOLVED
-	RemediatedAt   *time.Time     `bson:"remediatedAt,omitempty" json:"remediatedAt,omitempty"`
-	RemediatedBy   string         `bson:"remediatedBy,omitempty" json:"remediatedBy,omitempty"`
+	CircuitBreaker bool       `bson:"circuitBreaker,omitempty" json:"circuitBreaker,omitempty"`
+	Status         string     `bson:"status"            json:"status"` // OPEN|RESOLVED
+	RemediatedAt   *time.Time `bson:"remediatedAt,omitempty" json:"remediatedAt,omitempty"`
+	RemediatedBy   string     `bson:"remediatedBy,omitempty" json:"remediatedBy,omitempty"`
+	// Agentic failure handling: when the DEVICE refuses the auto-restart
+	// (ack ok:false — e.g. a latched thermal overload), the agent retries
+	// once after a backoff, then escalates the episode to the on-call
+	// human with a pre-drafted context note instead of silently waiting
+	// for a recovery that will never come.
+	Escalated      bool           `bson:"escalated,omitempty"     json:"escalated,omitempty"`
+	EscalatedAt    *time.Time     `bson:"escalatedAt,omitempty"   json:"escalatedAt,omitempty"`
+	EscalationNote string         `bson:"escalationNote,omitempty" json:"escalationNote,omitempty"`
 	OpenedAt       time.Time      `bson:"openedAt"          json:"openedAt"`
 	TraceID        string         `bson:"traceId,omitempty" json:"traceId,omitempty"`
 	TopFactors     []ai.TopFactor `bson:"topFactors,omitempty" json:"topFactors,omitempty"`
@@ -90,6 +99,7 @@ type agent struct {
 	inc           *mongo.Collection // ai_incidents
 	approv        *mongo.Collection // ai_approvals
 	cmds          *mongo.Collection // commands (auto-remediation gets a real lifecycle doc)
+	evs           *mongo.Collection // events (retry/escalation pages land in the shared audit log)
 	mqtt          *autopaho.ConnectionManager
 	model         *ai.Classifier
 	mu            sync.Mutex // guards wins, scorer, autoco (fed by poll, read by loop)
@@ -174,7 +184,7 @@ func main() {
 	a := &agent{
 		log: logger, db: db, coll: db.Collection("telemetry"),
 		inc: db.Collection("ai_incidents"), approv: db.Collection("ai_approvals"),
-		cmds: db.Collection("commands"),
+		cmds: db.Collection("commands"), evs: db.Collection("events"),
 		mqtt: cm, model: ai.NewClassifier(logger),
 		scorer: map[string]*ai.AnomalyScorer{}, wins: map[string]*ai.Window{},
 		autoco:       map[string]time.Time{},
@@ -641,6 +651,9 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 		if old.RemediatedAt != nil {
 			decision = string(ai.DecisionAuto)
 			reason = "auto-remediated; awaiting recovery (repeat actions blocked by cooldown)"
+			if old.Escalated {
+				reason = "auto-restart FAILED — escalated to on-call, manual action required (see escalationNote)"
+			}
 		}
 		decisionChanged := old.Decision != decision
 		// etaAlarmMin NaN (no rising path) => store nil, never a NaN double
@@ -657,6 +670,11 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 			a.log.Error("incident refresh failed", "err", err)
 			return
 		}
+		// agentic failure handling: if this episode was auto-remediated
+		// but the DEVICE refused the restart (command FAILED), retry once
+		// after a backoff, then escalate to on-call. Runs on every tick
+		// for remediated-but-still-OPEN episodes; no-ops otherwise.
+		a.checkRemediationFailure(ctx, &old, now)
 		if traceID != "" && old.TraceID == "" {
 			_, _ = a.inc.UpdateOne(ctx, bson.M{"_id": old.ID},
 				bson.M{"$set": bson.M{"traceId": traceID}})
@@ -812,6 +830,111 @@ func (a *agent) remediate(ctx context.Context, deviceID string) error {
 		a.log.Warn("sent-status update failed", "commandId", commandID, "err", err)
 	}
 	return nil
+}
+
+// checkRemediationFailure implements agentic failure handling: a remediated
+// episode whose auto-restart the DEVICE refused (command status FAILED —
+// e.g. a latched thermal overload) is not "awaiting recovery", it is stuck.
+// The agent retries the restart once after a backoff, then escalates the
+// episode to the on-call human with a pre-drafted context note (class,
+// confidence, ETA, the device's refusal detail, similar past episodes and
+// the manual action) instead of looping forever or silently waiting. Both
+// the retry and the escalation land in the shared `events` audit log, so
+// the console tells the whole story.
+//
+// Idempotent and stateless: the retry/escalation state is derived from the
+// command lifecycle docs (scoped to this episode by openedAt), never from
+// agent memory, so an agent restart mid-episode loses nothing.
+func (a *agent) checkRemediationFailure(ctx context.Context, inc *incidentDoc, now time.Time) {
+	if inc.RemediatedAt == nil || inc.Escalated || inc.Status != "OPEN" {
+		return // never remediated, already escalated, or closed
+	}
+	const backoff = 30 * time.Second
+	scope := bson.M{
+		"deviceId": inc.DeviceID, "action": "compressor_restart",
+		"issuedBy": "ai-agent", "createdAt": bson.M{"$gte": inc.OpenedAt},
+	}
+	var last struct {
+		Status    string    `bson:"status"`
+		AckDetail string    `bson:"ackDetail"`
+		CreatedAt time.Time `bson:"createdAt"`
+	}
+	err := a.cmds.FindOne(ctx, scope,
+		options.FindOne().SetSort(bson.D{{Key: "createdAt", Value: -1}})).Decode(&last)
+	if err != nil || last.Status != "FAILED" {
+		return // no command yet, ACKED (real fix), or still in flight
+	}
+	failed, err := a.cmds.CountDocuments(ctx, bson.M{
+		"deviceId": inc.DeviceID, "action": "compressor_restart",
+		"issuedBy": "ai-agent", "status": "FAILED",
+		"createdAt": bson.M{"$gte": inc.OpenedAt},
+	})
+	if err != nil {
+		return
+	}
+	if failed >= 2 {
+		// Both the start and the retry were refused: escalating is the
+		// whole point of agentic failure handling — never loop a third
+		// time, never sit quiet.
+		a.escalate(ctx, inc, last.AckDetail, failed, now)
+		return
+	}
+	// First refusal: retry once, but not immediately — a start the device
+	// just refused needs its backoff before another attempt (and the
+	// ack/sweeper needs time to land the FAILED status).
+	if now.Sub(last.CreatedAt) < backoff {
+		return
+	}
+	if err := a.remediate(ctx, inc.DeviceID); err != nil {
+		a.log.Warn("auto-restart retry publish failed", "deviceId", inc.DeviceID, "err", err)
+		return
+	}
+	a.log.Info("ai_remediation_retry", "deviceId", inc.DeviceID,
+		"attempt", failed+1, "ackDetail", last.AckDetail)
+	_, _ = a.evs.InsertOne(ctx, ops.Event{
+		Type: "auto_remediation_retry", DeviceID: inc.DeviceID, IncidentID: inc.ID.Hex(),
+		Severity: "warning", Actor: "ai-agent", At: now,
+		ExpiresAt: now.Add(7 * 24 * time.Hour),
+		Message:   "auto-restart refused — retrying once after backoff",
+		Data:      bson.M{"attempt": failed + 1, "ackDetail": last.AckDetail},
+	})
+}
+
+// escalate hands a stuck episode to the on-call human: the incident is
+// flagged (escalated/escalatedAt/escalationNote) and the shared audit log
+// gets a critical page carrying everything the responder needs,
+// pre-drafted — class, confidence, ETA, the device's refusal, the manual
+// action, and the closest past episode for context. The console surfaces
+// both via change streams; no human needs to go looking for the story.
+func (a *agent) escalate(ctx context.Context, inc *incidentDoc, ackDetail string, attempts int64, now time.Time) {
+	eta := "n/a (no rising path)"
+	if inc.EtaAlarmMin != nil {
+		eta = fmt.Sprintf("%.0f min", *inc.EtaAlarmMin)
+	}
+	similar := "none on record"
+	if len(inc.Similar) > 0 {
+		s := inc.Similar[0]
+		similar = fmt.Sprintf("%s %s (score %.2f)", s.DeviceID, s.FaultClass, s.Score)
+	}
+	note := fmt.Sprintf(
+		"%s on %s (conf %.2f, ETA to alarm %s): auto-restart FAILED %dx — refusal: %q. "+
+			"Manual action: power-cycle the controller — POST /api/devices/%s/commands {\"action\":\"reboot\"}. "+
+			"Closest past episode: %s.",
+		inc.Class, inc.DeviceID, inc.Confidence, eta, attempts, ackDetail, inc.DeviceID, similar)
+	if _, err := a.inc.UpdateOne(ctx, bson.M{"_id": inc.ID}, bson.M{"$set": bson.M{
+		"escalated": true, "escalatedAt": now, "escalationNote": note,
+	}}); err != nil {
+		a.log.Warn("escalation persist failed", "deviceId", inc.DeviceID, "err", err)
+		return
+	}
+	_, _ = a.evs.InsertOne(ctx, ops.Event{
+		Type: "incident_escalated", DeviceID: inc.DeviceID, IncidentID: inc.ID.Hex(),
+		Severity: "critical", Actor: "ai-agent", At: now,
+		ExpiresAt: now.Add(7 * 24 * time.Hour),
+		Message:   "auto-restart refused twice — ESCALATED to on-call: manual action required",
+		Data:      bson.M{"note": note, "attempts": attempts, "ackDetail": ackDetail},
+	})
+	a.log.Info("ai_escalated", "deviceId", inc.DeviceID, "attempts", attempts, "ackDetail", ackDetail)
 }
 
 // similarPast ranks past incidents by cosine similarity over their

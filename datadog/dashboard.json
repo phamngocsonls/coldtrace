@@ -137,11 +137,14 @@
   {
    "definition": {
     "type": "timeseries",
-    "title": "Ingest errors by reason",
+    "title": "Ingest write retries (MQTT → Mongo batch requeue)",
     "requests": [
      {
-      "q": "sum:coldchain.ingest.errors{*} by {reason}.as_count()",
-      "display_type": "bars"
+      "q": "sum:coldchain.ingest.batch_retries{*}.as_count()",
+      "display_type": "bars",
+      "style": {
+       "palette": "warm"
+      }
      }
     ]
    },
@@ -191,11 +194,14 @@
   {
    "definition": {
     "type": "timeseries",
-    "title": "AI decisions by classification (spans: ai.decision)",
+    "title": "AI decisions by classification (span metrics: ai.decision)",
     "requests": [
      {
-      "q": "sum:trace.ai.decision.hits{service:coldtrace-ai-agent} by {ai.decision}.as_count()",
-      "display_type": "bars"
+      "q": "sum:traces.span.metrics.calls{span.name:ai.decision} by {ai.decision}",
+      "display_type": "bars",
+      "style": {
+       "palette": "orange"
+      }
      }
     ]
    },

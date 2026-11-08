@@ -84,7 +84,10 @@ Do not run cleanup or restart ai-agent in the last ~7 minutes before judging.
 | ~6:30 | FZ-002 `decision AUTO` → agent remediates | Command QUEUED→SENT→**ACKED (~12 ms)**, tile recovers, incident auto-resolves (`resolvedBy: system:recovery` after 60 s healthy) |
 | 7:00 | Inject on FZ-004 + FZ-005 at once | (second simultaneous failure) |
 | ~9:30 | Both incidents open | Fleet circuit breaker → **HOLD latched for the episode** (FZ-005 stays HOLD even after FZ-004 recovers) |
-| 10:00 | "Open trace in Datadog" + Compliance CSV | `mqtt.ingest→mongo.write→ai.decision` span chain; HACCP excursion export closes the story |
+| 10:00 | On-call beat: ACK FZ-005 → dispatch technician (console Remediate) | `technician_dispatched` event → device fixed → `system:recovery` auto-resolves — the human half of the resolution story |
+| 11:00 | (Q&A ammo) Inject `compressor_failure_hard` on FZ-005 | **The failure that fights back**: restart REFUSED (`ok:false`, thermal overload latched) → agent retries after 30 s → REFUSED → **ESCALATED to on-call** (critical event + pre-drafted `escalationNote` with the manual action) |
+| 11:30 | `POST /api/devices/FZ-005/commands {"action":"reboot"}` as on-call | The exact fix the escalation note prescribed → device clears → recovery auto-resolves |
+| 12:00 | "Open trace in Datadog" + Compliance CSV | `mqtt.ingest→mongo.write→ai.decision` span chain; HACCP excursion export closes the story |
 
 ## 5. Verified live evidence (this rehearsal)
 

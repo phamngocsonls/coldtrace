@@ -20,9 +20,18 @@ import (
 const (
 	FaultNone              = ""
 	FaultCompressorFailure = "compressor_failure"
-	FaultDoorLeftOpen      = "door_left_open"
-	FaultSensorDrift       = "sensor_drift"
-	FaultPowerOutage       = "power_outage"
+	// FaultCompressorFailureHard is compressor_failure with a latched
+	// thermal overload: identical telemetry physics (so the classifier
+	// correctly calls it compressor_failure) but a remote
+	// compressor_restart CANNOT clear it — the controller rejects the
+	// start (ok:false) until a human power-cycles it (reboot). It exists
+	// so the agent's failure handling (retry -> escalate to on-call) has
+	// a real failure to handle: the soft mode always restarts, so the
+	// escalation path could never be rehearsed.
+	FaultCompressorFailureHard = "compressor_failure_hard"
+	FaultDoorLeftOpen          = "door_left_open"
+	FaultSensorDrift           = "sensor_drift"
+	FaultPowerOutage           = "power_outage"
 )
 
 // Action is a control command the device understands.
@@ -185,7 +194,7 @@ func (d *Device) SetFault(fault string) {
 	d.sensorOffsetC = 0
 	d.motorRunning = true
 	switch fault {
-	case FaultCompressorFailure:
+	case FaultCompressorFailure, FaultCompressorFailureHard:
 		d.compressorRunning = false
 		d.log.Error("compressor_fail", "event", "compressor_fail", "tempC", round2(d.tempC))
 	case FaultDoorLeftOpen:
@@ -217,9 +226,23 @@ func (d *Device) Faulted() string {
 func (d *Device) HandleCommand(commandID string, action Action, payload []byte) Ack {
 	ack := Ack{CommandID: commandID, DeviceID: d.ID, Action: action, OK: true, At: time.Now().UTC()}
 	switch action {
-	case ActionCompressorRestart, ActionReboot:
+	case ActionCompressorRestart:
+		if d.Faulted() == FaultCompressorFailureHard {
+			// Latched thermal overload: the start is refused (ok:false) and
+			// the fault STANDS — this is the failure the agent's
+			// retry->escalate handling exists for. Only a controller
+			// power-cycle (reboot) resets the latch, i.e. a human.
+			ack.OK = false
+			ack.Detail = "restart failed: thermal overload latched — power-cycle the controller (reboot) to reset"
+		} else {
+			d.SetFault(FaultNone)
+			ack.Detail = "fault cleared, device back online"
+		}
+	case ActionReboot:
+		// A power-cycle resets a latched thermal overload (and anything
+		// else) — the manual fix path for the hard failure mode.
 		d.SetFault(FaultNone)
-		ack.Detail = "fault cleared, device back online"
+		ack.Detail = "controller power-cycled, fault cleared, device back online"
 	case ActionSetFault:
 		var p struct {
 			Fault string `json:"fault"`
@@ -267,10 +290,13 @@ func (d *Device) Tick() Reading {
 
 	inDefrost := time.Now().Before(d.defrostUntil)
 	switch d.faulted {
-	case FaultCompressorFailure:
+	case FaultCompressorFailure, FaultCompressorFailureHard:
 		// Dead compressor: motor is not energized (motorRunning=false) but the
 		// controller is still powered and calling for it, so the cabinet
-		// drifts toward ambient at ~failRampCPM.
+		// drifts toward ambient at ~failRampCPM. The HARD variant is
+		// physically identical from the outside — that's the point: the
+		// classifier sees compressor_failure, and only the restart ack
+		// reveals that this one needs a human.
 		d.tempC += failRampCPM / 12.0 // one 5s step
 		if d.tempC > ambientC {
 			d.tempC = ambientC

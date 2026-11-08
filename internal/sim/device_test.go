@@ -35,3 +35,44 @@ func TestResetRestoresPristineState(t *testing.T) {
 		t.Fatalf("after reset reading = %+v, want compressor running, door closed, powered", r)
 	}
 }
+
+// TestHardFailureBlocksRestartUntilReboot pins the agentic-failure-handling
+// physics: compressor_failure_hard is telemetry-identical to
+// compressor_failure (same warm ramp — the classifier should call it
+// compressor_failure, and only the restart ack reveals it is hard) but a
+// remote compressor_restart CANNOT clear it: the controller refuses the
+// start (ok:false) and the fault STANDS until a human power-cycles the
+// controller. Without this mode the agent's retry->escalate path had no
+// real failure to handle — the soft mode always restarts.
+func TestHardFailureBlocksRestartUntilReboot(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	d := NewSeeded("FZ-T02", log, 7)
+	d.SetFault(FaultCompressorFailureHard)
+
+	// telemetry physics: same dead-compressor ramp as the soft mode
+	start := d.Tick().TempC
+	for i := 0; i < 12; i++ { // one minute
+		d.Tick()
+	}
+	if got := d.Tick().TempC; got <= start {
+		t.Fatalf("hard failure must warm like a dead compressor: %.2f -> %.2f", start, got)
+	}
+
+	// the remote restart is REFUSED and the fault stands
+	ack := d.HandleCommand("cmd-refused", ActionCompressorRestart, nil)
+	if ack.OK {
+		t.Fatal("restart must be refused while the thermal overload is latched")
+	}
+	if got := d.Faulted(); got != FaultCompressorFailureHard {
+		t.Fatalf("fault = %q after refused restart, want it to STAND", got)
+	}
+
+	// the human path: power-cycle (reboot) resets the latch
+	ack = d.HandleCommand("cmd-reboot", ActionReboot, nil)
+	if !ack.OK {
+		t.Fatalf("reboot must reset the latch: %+v", ack)
+	}
+	if got := d.Faulted(); got != FaultNone {
+		t.Fatalf("fault = %q after reboot, want cleared", got)
+	}
+}

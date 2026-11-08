@@ -153,6 +153,24 @@ func main() {
 		store.ApplyAck(ctx, ack.CommandID, ack.OK, ack.Detail, ack.At)
 	})
 
+	// Reconnect-safe acks subscription: OnConnectionUp fires on EVERY
+	// (re)connection — including the first — so the subscription survives
+	// broker resets. MQTT subscriptions are BROKER session state and every
+	// autopaho reconnect negotiates a clean session: a one-shot Subscribe
+	// after the first AwaitConnection died with the first TCP reset
+	// (observed live 2026-11-08: a broker RST silently killed ack
+	// consumption while publishes kept working, so every later command
+	// rotted to TIMEOUT even though the simulator logged its acks).
+	// gateway/simulator/fleet-simulator already used this shape; ops-api
+	// was the gap. Regression test: TestAcksSubscriptionIsReconnectSafe.
+	cfg.OnConnectionUp = func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
+		if _, err := cm.Subscribe(ctx, &paho.Subscribe{
+			Subscriptions: []paho.SubscribeOptions{{Topic: "coldchain/+/acks", QoS: 1}},
+		}); err != nil {
+			logger.Error("acks subscribe failed", "err", err)
+		}
+	}
+
 	cm, err := autopaho.NewConnection(ctx, cfg)
 	if err != nil {
 		logger.Error("mqtt connection", "err", err)
@@ -162,15 +180,7 @@ func main() {
 		logger.Error("mqtt await", "err", err)
 		os.Exit(1)
 	}
-	srv.mqtt = cm
-
-	// subscribe to device acks (router handler above only registers the
-	// callback — without Subscribe the broker never sends us anything)
-	if _, err := cm.Subscribe(ctx, &paho.Subscribe{
-		Subscriptions: []paho.SubscribeOptions{{Topic: "coldchain/+/acks", QoS: 1}},
-	}); err != nil {
-		logger.Error("acks subscribe failed", "err", err)
-	}
+	srv.mqtt = cm // acks are subscribed in OnConnectionUp (reconnect-safe)
 
 	// change streams -> SSE hub (device_state + ai_incidents + events)
 	streamCtx, streamCancel := context.WithCancel(ctx)

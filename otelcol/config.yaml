@@ -47,6 +47,23 @@ connectors:
     traces:
       compute_stats_by_span_kind: true
       peer_tags_aggregation: true
+  # RED metrics from spans (spanmetrics connector). The datadog connector
+  # above only feeds APM stats (backend views); custom spans like
+  # ai.decision never became metrics — the dashboard's "AI decisions by
+  # classification" tile queried trace.ai.decision.hits, a metric the
+  # Datadog backend only generates for well-known HTTP spans, and
+  # rendered empty forever. This connector turns every span into
+  # traces.span.metrics.calls/duration with span attributes as tags
+  # (OTel dots become underscores in Datadog: ai.decision -> ai_decision).
+  # Dimensions deliberately exclude free-text (ai.reason) and high-cardinality
+  # floats (ai.confidence): classification, fault class and device are the
+  # chartable axes.
+  spanmetrics/decision:
+    namespace: traces.span.metrics
+    dimensions:
+      - name: ai.decision
+      - name: ai.fault_class
+      - name: ai.device
 
 exporters:
   datadog/exporter:
@@ -66,13 +83,13 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, resource, batch]
-      exporters: [datadog/connector/connector, datadog/exporter]
+      exporters: [datadog/connector/connector, datadog/exporter, spanmetrics/decision]
     traces/dd: # APM stats derived from the full trace stream
       receivers: [datadog/connector/connector]
       processors: [batch]
       exporters: [datadog/exporter]
     metrics:
-      receivers: [otlp, datadog/connector/connector]
+      receivers: [otlp, datadog/connector/connector, spanmetrics/decision]
       processors: [memory_limiter, resourcedetection, resource, batch]
       exporters: [datadog/exporter]
     logs:

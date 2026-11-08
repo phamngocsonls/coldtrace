@@ -37,7 +37,11 @@ echo "  desired setpoints reset to -18C"
 if [ "${1:-}" != "--keep-history" ]; then
   $MONGO 'db.ai_incidents.deleteMany({seeded:{$ne:true}})' >/dev/null
   $MONGO 'db.events.deleteMany({})' >/dev/null
-  echo "  rehearsal incidents + events cleared (seeded history preserved)"
+  # commands are never seeded (verified: seedhistory touches incidents +
+  # telemetry buckets only) — stale rehearsal lifecycle docs (incl. any
+  # TIMEOUT residue) must not show on a device page on stage.
+  $MONGO 'db.commands.deleteMany({})' >/dev/null
+  echo "  rehearsal incidents + events + commands cleared (seeded history preserved)"
 else
   echo "  history preserved (--keep-history)"
 fi
