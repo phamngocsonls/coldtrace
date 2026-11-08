@@ -1,452 +1,447 @@
-# ColdTrace — Demo Video Plan
+# ColdTrace — Kế hoạch quay video demo
 
-A complete production plan for a **10-minute product demo video**: what to
-record, in which order, what to say, and how to hide the boring parts. Every
-timing below was **measured live** on this stack (not estimated), and every
-scene has a fallback so a single hiccup cannot sink the recording.
-
----
-
-## 0. One-paragraph story (the pitch the video must land)
-
-> 12 freezers hold $250k of seafood. A compressor dies at 02:00. The box
-> crosses −14 °C at 02:40 and −10 °C — the spoilage line — at 03:20.
-> Nobody is watching at 02:00.
->
-> ColdTrace is the AI operator that is: it classifies the fault from the
-> thermal pattern in **~3 minutes**, explains **why** (top factors + LLM
-> root-cause), remembers **similar incidents**, decides **within guardrails**
-> (approved class, confidence, ETA, fleet circuit breaker), remediates by
-> itself (**command → device ACK in 0–38 ms**), then **auto-resolves** the
-> incident when the cabinet is provably healthy again — and the whole chain
-> is one trace in Datadog.
->
-> And when it **can't** fix it — no remote action, or the device refuses —
-> it says so and **pages a human**, pre-drafted. Three resolution paths
-> (auto / on-call / escalate), one audit trail.
-
-**The resolution arc is the spine of the video.** Every failure ends in one
-of three actions, and each is demonstrated: **A** auto-restart, **B** human
-dispatch, **C** breaker escalation, plus **A′** the agent failing safely.
+Kế hoạch sản xuất đầy đủ cho một **video demo sản phẩm 10 phút**: quay gì, theo
+thứ tự nào, nói gì, và làm sao giấu những đoạn nhàm chán. Mọi mốc thời gian
+dưới đây đều **đo trực tiếp** trên stack này (không phải ước lượng), và mỗi
+cảnh đều có phương án dự phòng để một trục trặc nhỏ không thể làm hỏng buổi quay.
 
 ---
 
-## 1. Recording setup
+## 0. Câu chuyện một đoạn (thông điệp video phải truyền tải)
 
-| Item | Recommendation |
+> 12 tủ đông chứa 250.000 USD hải sản. Một compressor chết lúc 02:00. Tủ vượt
+> −14 °C lúc 02:40 và −10 °C — ngưỡng hư hỏng — lúc 03:20. Lúc 02:00 không ai
+> đang trực.
+
+> ColdTrace là "AI operator" luôn trực: nó phân loại sự cố từ dấu vết nhiệt
+> trong **~3 phút**, giải thích **tại sao** (top factors + LLM root-cause),
+> nhớ **các sự cố tương tự**, ra quyết định **trong khuôn khổ guardrail**
+> (class đã duyệt, độ tin cậy, ETA, fleet circuit breaker), tự khắc phục
+> (**lệnh → thiết bị ACK trong 0–38 ms**), rồi **tự đóng** incident khi tủ
+> chứng minh được là đã khỏe lại — và toàn bộ chuỗi là một trace trong Datadog.
+
+> Và khi nó **không thể** tự sửa — không có hành động từ xa, hoặc thiết bị từ
+> chối — nó nói rõ và **gọi người trực**, với thông tin soạn sẵn. Ba con đường
+> xử lý (tự động / gọi on-call / escalate), một cửa audit duy nhất.
+
+**Cung "khắc phục" là xương sống của video.** Mọi sự cố kết thúc bằng một
+trong ba hành động, và cả ba đều được trình diễn: **A** tự restart, **B** điều
+người xử lý, **C** ngắt quyền tự động (breaker), cộng **A′** — AI thất bại một
+cách an toàn.
+
+---
+
+## 1. Thiết lập quay
+
+| Hạng mục | Đề xuất |
 |---|---|
-| Tool | OBS Studio (or Screen Studio for auto-zoom) |
-| Window | Browser at **1512×982**, macOS Chrome, zoom 100% |
-| Area | Console `http://localhost:3301` + one terminal pane for `curl` injects |
-| Cursor | Enable "click highlight" (OBS: Cursor Spotlight effect) |
-| Audio | Record narration **after** the screen, per scene — easier to re-take |
-| Theme | Use the console dark theme as recorded — it is the product look |
-| Capture | 60 fps if panning between pages; 30 fps acceptable |
+| Công cụ | OBS Studio (hoặc Screen Studio để tự zoom) |
+| Cửa sổ | Trình duyệt **1512×982**, Chrome trên macOS, zoom 100% |
+| Vùng quay | Console `http://localhost:3301` + một cửa sổ terminal để chạy `curl` inject |
+| Con trỏ | Bật "click highlight" (OBS: hiệu ứng Cursor Spotlight) |
+| Âm thanh | Thu lời thuyết minh **sau** khi quay hình, theo từng cảnh — dễ quay lại hơn |
+| Giao diện | Dùng theme tối của console như khi quay — đó chính là "bộ mặt" sản phẩm |
+| Tốc độ | 60 fps nếu có lia giữa các trang; 30 fps vẫn chấp nhận được |
 
-**Two-terminal layout works well:** left = console, right = a terminal where
-you run the `curl` inject commands, so viewers SEE the action → reaction.
+**Bố cục hai terminal rất hiệu quả:** trái = console, phải = terminal chạy lệnh
+`curl` inject, để người xem **thấy** hành động → phản ứng.
 
 ---
 
-## 2. Pre-record checklist (T-30 min)
+## 2. Checklist trước khi quay (T-30 phút)
 
-**Learn the product first (if you haven't):** `docs/QUICKSTART.md` §1–§6 —
-the 60-second pitch, the console tour table, the demo cheat sheet and the 5
-key concepts. That page plus this plan is everything you need on camera;
-`solution-design.md` is the deep reference if a judge drills in.
+**Nắm sản phẩm trước (nếu chưa):** `docs/QUICKSTART.md` §1–§6 — pitch 60
+giây, bảng tour console, cheat sheet demo và 5 khái niệm chính. Trang đó cộng
+với kế hoạch này là đủ để lên hình; `solution-design.md` là tài liệu tham
+chiếu sâu nếu giám khảo hỏi xoáy.
 
-Run in order; every line is verified by `scripts/demo_preflight.sh`.
+Chạy theo thứ tự; mỗi dòng đều được `scripts/demo_preflight.sh` kiểm chứng.
 
 ```bash
-docker compose up -d --wait                                # stack healthy
-MONGO_URI=mongodb://localhost:27017 go run ./tools/initdb   # indexes exist
+docker compose up -d --wait                                # stack khỏe
+MONGO_URI=mongodb://localhost:27017 go run ./tools/initdb   # có index
 MONGO_URI=mongodb://localhost:27017 go run ./tools/seedhistory
-#   → 24 resolved incidents (AI memory) + 6d hourly + 21d daily tiers
-#   + a 22-min raw excursion on FZ-009 → the HACCP CSV has rows on day one
-./scripts/demo_cleanup.sh                                  # 12×OK, zero OPEN
-./scripts/demo_preflight.sh                                # 12/12 must pass
+#   → 24 incident đã resolve (bộ nhớ AI) + 6 ngày bucket giờ + 21 ngày bucket ngày
+#   + một excursion thô 22 phút trên FZ-009 → CSV HACCP có dữ liệu ngay ngày đầu
+./scripts/demo_cleanup.sh                                  # 12×OK, không có incident OPEN
+./scripts/demo_preflight.sh                                # phải đạt 12/12
 ```
 
-Then the **critical timing rule** (this is the #1 way a recording goes wrong):
+Sau đó là **quy tắc thời gian sống còn** (lý do số 1 khiến buổi quay hỏng):
 
-> **Wait ~7 minutes after cleanup before the first inject.** The classifier
-> needs a warm ~6-minute window (72 samples @ 5 s) before it can be confident.
-> Detection lands **~2.5–4 min after inject** when warm, **~6.5 min** when
-> cold. Do not run cleanup, restart `ai-agent`, or call `/api/demo/reset` in
-> the last 7 minutes before a scene.
+> **Chờ ~7 phút sau cleanup trước lần inject đầu tiên.** Classifier cần một
+> cửa sổ ấm ~6 phút (72 mẫu @ 5 s) trước khi đủ tự tin. Khi đã ấm, phát hiện
+> rơi vào **~2,5–4 phút sau inject**; khi nguội là **~6,5 phút**. Không chạy
+> cleanup, không restart `ai-agent`, không gọi `/api/demo/reset` trong 7 phút
+> cuối trước một cảnh.
 
-State to confirm before recording:
+Trạng thái cần xác nhận trước khi quay:
 
-- `GET /api/approvals` → **only `compressor_failure` approved** (the video
-  needs `power_outage` to be PROPOSED first, then show the approval moment)
+- `GET /api/approvals` → **chỉ `compressor_failure` được duyệt** (video cần
+  `power_outage` ở trạng thái PROPOSED trước, rồi mới trình diễn khoảnh khắc
+  duyệt)
 - `GET /api/policy` → `minConfidence 0.85`, `maxEtaAlarmMinutes 45`,
-  `fleetCircuitBreaker 2`, kill switch off
-- Console open on Fleet Overview, SSE live (tiles flip every 5 s)
-- Datadog logged in on `app.ap1.datadoghq.com` (traces + logs)
+  `fleetCircuitBreaker 2`, kill switch tắt
+- Console mở ở Fleet Overview, SSE chạy live (tile đổi mỗi 5 s)
+- Datadog đã đăng nhập trên `app.ap1.datadoghq.com` (traces + logs)
 
 ---
 
-## 3. Storyboard (scene by scene)
+## 3. Kịch bản (từng cảnh)
 
-Total runtime target: **10:00** (eleven scenes). Real detection waits are hidden
-with **cuts** (see §5), so wall-clock recording stays ~40 min for the 10 min
-video. The spine is **resolution**: three action paths (AUTO / on-call /
-escalate) plus A′ (the agent failing safely), all shown.
+Tổng thời lượng mục tiêu: **10:00** (mười một cảnh). Thời gian chờ phát hiện
+thật được giấu bằng **cắt** (xem §5), nên thời gian quay thực tế vẫn khoảng
+~40 phút cho video 10 phút. Xương sống là **khắc phục**: ba con đường hành
+động (tự động / on-call / escalate) cộng A′ (AI thất bại an toàn), đều được
+trình diễn.
 
-### Scene 1 — The problem (0:00–0:40) *no live stack needed*
+### Cảnh 1 — Vấn đề (0:00–0:40) *không cần stack chạy*
 
-- **Show:** `docs/screenshots` or the deck's opening: freezer warms −18 →
-  −14 → −10 while nobody watches. One stat on screen: *"FZ-010 holds $25k of
-  vaccines — the spoilage line is −10 °C."*
-- **Say:** the pitch from §0. End on: *"This is ColdTrace. Let me kill a
-  compressor and watch it handle it."*
-- Why first: judges decide in the first 30 s whether the rest is worth
-  watching. A dead freezer is the whole business case.
+- **Chiếu:** `docs/screenshots` hoặc màn mở đầu của deck: tủ ấm dần −18 →
+  −14 → −10 trong khi không ai trực. Một con số trên màn hình: *"FZ-010 chứa
+  25.000 USD vaccine — ngưỡng hư hỏng là −10 °C."*
+- **Nói:** thông điệp ở §0. Kết bằng: *"Đây là ColdTrace. Để tôi giết một
+  compressor và xem nó xử lý thế nào."*
+- Vì sao mở đầu thế: giám khảo quyết định trong 30 giây đầu liệu phần còn lại
+  có đáng xem không. Một tủ đông chết là toàn bộ business case.
 
-### Scene 2 — Fleet Overview + the status ladder (0:40–1:30)
+### Cảnh 2 — Tổng quan fleet + thang trạng thái (0:40–1:30)
 
-- **Show:** console `/` — 12 green tiles, KPI strip, Sites rollup, the live
-  event feed ticking (SSE, not polling).
-- **Say:** *"Twelve freezers, three sites, all green. Status is COMPUTED
-  never stored — STALE → ALARM → AT_RISK → OK, with a deadband so a resting
-  compressor doesn't paint the fleet yellow. It's live over MongoDB change
-  streams — no refresh, no polling."*
-- **Proof moment:** point at a tile's temperature updating every 5 s.
+- **Chiếu:** console `/` — 12 tile xanh, dải KPI, rollup theo Site, feed sự
+  kiện chạy live (SSE, không polling).
+- **Nói:** *"Mười hai tủ đông, ba site, tất cả xanh. Trạng thái được TÍNH
+  chứ không lưu — STALE → ALARM → AT_RISK → OK, có deadband để compressor
+  đang nghỉ không nhuộm vàng cả fleet. Chạy live qua MongoDB change streams —
+  không refresh, không polling."*
+- **Khoảnh khắc chứng minh:** chỉ vào một tile có nhiệt độ cập nhật mỗi 5 s.
 
-### Scene 3 — MongoDB under the hood (1:30–2:20) ⭐ sponsor scene
+### Cảnh 3 — MongoDB bên dưới (1:30–2:20) ⭐ cảnh nhà tài trợ
 
-- **Show:** device detail page → the **History chart**, then flip the tier
-  switch **hourly → daily** and let the chart re-render (7 d of hourly
-  buckets, then 3 weeks of daily). Optional split-screen with
-  `docs/mongodb-data-model.md` §1 (the ownership diagram).
-- **Say (the Mongo story in 50 s):** *"Every reading lands in a MongoDB
-  time-series collection — metaField holds the device labels so a site
-  filter skips whole buckets. Raw readings TTL out at 24 h, but `$merge`
-  rollups keep hourly for 7 days and daily for a year — that chart you just
-  saw flip is reading the ROLLOUPS, bucketed in local time, not raw data.
-  The live grid is change streams: one oplog tail, no polling. And the
-  registry is `$jsonSchema`-validated — a malformed device can't even be
-  written."*
-- This is the scene that answers "why MongoDB" — time series + tiering +
-  change streams + schema validation in one continuous shot.
+- **Chiếu:** trang chi tiết thiết bị → **biểu đồ History**, rồi bật công tắc
+  tầng **hourly → daily** và để biểu đồ vẽ lại (7 ngày bucket giờ, rồi 3 tuần
+  bucket ngày). Có thể chia đôi màn hình với `docs/mongodb-data-model.md` §1
+  (sơ đồ phân quyền sở hữu dữ liệu).
+- **Nói (câu chuyện Mongo trong 50 giây):** *"Mỗi mẫu đọc rơi vào một
+  time-series collection của MongoDB — metaField giữ nhãn thiết bị nên bộ lọc
+  theo site bỏ qua nguyên bucket. Mẫu thô hết hạn sau 24 giờ, nhưng rollup
+  `$merge` giữ hourly 7 ngày và daily một năm — biểu đồ bạn vừa thấy đổi tầng
+  là đang đọc ROLLUP, bucket theo giờ địa phương, không phải dữ liệu thô.
+  Lưới live là change streams: một tail oplog, không polling. Và registry được
+  validate bằng `$jsonSchema` — một thiết bị sai định dạng không thể ghi vào
+  được."*
+- Đây là cảnh trả lời "vì sao MongoDB" — time series + phân tầng + change
+  streams + schema validation trong một cú máy liên tục.
 
-### Scene 4 — Kill a freezer: detection (2:20–4:00) ⭐ core scene
+### Cảnh 4 — Giết một tủ đông: phát hiện (2:20–4:00) ⭐ cảnh chính
 
-- **Do:** terminal: `POST /api/demo/inject {"deviceId":"FZ-006","fault":"power_outage"}`
-  — or use the Demo drawer in the console (same thing, more visual).
-- **While it warms (~90 s on camera):** narrate the wait — *"the classifier
-  is watching a 6-minute sliding window; 13 features; it needs ~3 minutes of
-  fault physics before it will commit."* Optionally show the fleet grid
-  going AT_RISK on FZ-6.
-- **CUT** (see §5) → return when the incident is OPEN. **Show:** Incidents
-  page: the new card.
+- **Làm:** terminal: `POST /api/demo/inject {"deviceId":"FZ-006","fault":"power_outage"}`
+  — hoặc dùng ngăn Demo trong console (cùng tác dụng, trực quan hơn).
+- **Trong lúc chờ (~90 s trên hình):** thuyết minh — *"classifier đang nhìn
+  cửa sổ trượt 6 phút; 13 đặc trưng; nó cần ~3 phút vật lý sự cố trước khi
+  dám kết luận."* Có thể cho thấy lưới fleet chuyển AT_RISK trên FZ-6.
+- **CẮT** (xem §5) → quay lại khi incident OPEN. **Chiếu:** trang Incidents:
+  card mới.
   - `faultClass: power_outage`, `confidence: 1.00`
-  - `decision: PROPOSED` — *"first incident of this class — awaiting human
-    approval"* ← **say this out loud: the AI does NOT act without permission**
-  - **topFactors bars**: `power_mean`, `compressor_duty` — *"these drove the
-    call; the model shows its work"*
-  - FZ-006 tile now **AT_RISK/ALARM** on the fleet grid.
-- **Say:** *"~3 minutes after the fault, the classifier calls it a power
-  outage at full confidence — but it's the first of its kind, so ColdTrace
-  proposes, it doesn't act. Human in the loop by design."*
+  - `decision: PROPOSED` — *"sự cố đầu tiên thuộc class này — chờ người duyệt"*
+    ← **nói to câu này: AI KHÔNG hành động khi chưa được phép**
+  - **topFactors dạng thanh**: `power_mean`, `compressor_duty` — *"đây là
+    những yếu tố dẫn tới quyết định; model trình bày cách nó nghĩ"*
+  - Tile FZ-006 giờ **AT_RISK/ALARM** trên lưới fleet.
+- **Nói:** *"~3 phút sau sự cố, classifier gọi đúng là mất điện với độ tin cậy
+  tuyệt đối — nhưng đây là lần đầu gặp, nên ColdTrace đề xuất chứ không hành
+  động. Con người nằm trong vòng lặp theo thiết kế."*
 
-### Scene 5 — Explain: LLM root-cause + memory (4:00–5:00) ⭐ AI scene
+### Cảnh 5 — Giải thích: LLM root-cause + trí nhớ (4:00–5:00) ⭐ cảnh AI
 
-Two panels on the incident page, in this order:
+Hai panel trên trang incident, theo thứ tự:
 
-1. **Explain → RCA**: the LLM (OneNexus/OpenAI-compatible engine) writes a
-   root-cause analysis **grounded in the actual window stats** — summary,
-   root cause, evidence bullets, recommended actions. Say: *"An LLM that can
-   only see this device's real telemetry — it cannot invent a number."*
-   (If the LLM is down: the deterministic template engine answers instead —
-   same shape, data-grounded. The demo never breaks.)
-2. **Similar past incidents**: 3 matches, cosine over 13-dim feature vectors,
-   *"99.6% — same failure signature as FZ-012 last week"*. Say: *"The agent
-   has memory. It recognized this pattern."*
+1. **Explain → RCA**: LLM (engine OneNexus/OpenAI-compatible) viết phân tích
+   nguyên nhân gốc **dựa trên số liệu thật của cửa sổ** — tóm tắt, nguyên
+   nhân, các bằng chứng, hành động đề xuất. Nói: *"Một LLM chỉ nhìn được
+   telemetry thật của thiết bị này — nó không thể bịa ra một con số."*
+   (Nếu LLM chết: engine template tất định trả lời thay — cùng định dạng, vẫn
+   dựa trên dữ liệu. Demo không bao giờ gãy.)
+2. **Similar past incidents**: 3 kết quả, cosine trên vector 13 chiều,
+   *"99,6% — cùng dấu hiệu hỏng với FZ-012 tuần trước"*. Nói: *"Agent có trí
+   nhớ. Nó đã nhận ra pattern này."*
+3. **Link trace**: bấm *"Open trace in Datadog"* — chuyển tới Cảnh 8 hoặc mở
+   tab mới để dùng sau.
 
-3. **Trace link**: click *"Open trace in Datadog"* — jump to Scene 8 or open
-   in a new tab for later.
+### Cảnh 6 — Duyệt → TỰ ĐỘNG khắc phục → TỰ ĐỘNG đóng (5:00–6:40) ⭐⭐ cao trào
 
-### Scene 6 — Approve → AUTO-remediate → AUTO-RESOLVE (5:00–6:40) ⭐⭐ the climax
+Đây là cảnh quyết định — vòng lặp khép kín trọn vẹn, và phải quay như MỘT
+chuỗi liên tục:
 
-This is the money scene — the full closed loop, and it must be shown as ONE
-continuous chain:
-
-- **Do:** AI Control page → approve `power_outage`… or better for pacing:
-  approve `compressor_failure` (already approved) and instead
+- **Làm:** trang AI Control → duyệt `power_outage`… hoặc hay hơn cho nhịp
+  video: duyệt `compressor_failure` (đã duyệt sẵn) và inject
   `POST /api/demo/inject {"deviceId":"FZ-002","fault":"compressor_failure"}`.
-- **Wait ~2.5–4 min** → **CUT** → return at `decision: AUTO`.
-- **Show & say, in order:**
-  1. Card: `decision: AUTO`, confidence ~0.97, ETA ~35 min — *"approved class,
-     confidence and ETA gates passed within guardrails"*
+- **Chờ ~2,5–4 phút** → **CẮT** → quay lại ở `decision: AUTO`.
+- **Chiếu & nói, theo thứ tự:**
+  1. Card: `decision: AUTO`, confidence ~0,97, ETA ~35 phút — *"class đã duyệt,
+     các cổng độ tin cậy và ETA đều đạt trong khuôn khổ guardrail"*
   2. **Commands/Events:** `compressor_restart` **QUEUED → SENT → ACKED**,
-     latency **~12 ms** — *"the agent remediates over the same MQTT path a
-     human would, with a full audit trail"*
-  3. FZ-002 tile recovers on the fleet grid (temperature pulls down)
-  4. **THE AUTO-RESOLVE** (the part everyone misses): wait ~2–3 min more →
-     **CUT** → the incident card flips to **RESOLVED,
-     `resolvedBy: system:recovery`** — *"no human clicked anything. After
-     60 seconds of provably healthy telemetry the agent closes its own
-     incident. Detect → act → RECOVER → learn."*
-- Kicker (do not skip — it's the learn half of the loop):
+     độ trễ **~12 ms** — *"agent khắc phục qua đúng đường MQTT mà con người
+     vẫn dùng, với audit trail đầy đủ"*
+  3. Tile FZ-002 hồi phục trên lưới (nhiệt độ kéo xuống)
+  4. **TỰ ĐỘNG ĐÓNG** (phần ai cũng bỏ quên): chờ thêm ~2–3 phút → **CẮT** →
+     card chuyển **RESOLVED, `resolvedBy: system:recovery`** — *"không ai bấm
+     gì cả. Sau 60 giây telemetry chứng minh khỏe mạnh, agent tự đóng incident
+     của chính nó. Phát hiện → hành động → PHỤC HỒI → học."*
+- Đoạn kết (đừng bỏ — đây là nửa "học" của vòng lặp):
   `POST /api/incidents/{id}/feedback {"resolvedClass":"compressor_failure"}`
-  → `"learned": true`, agent logs `ai_learned trainSamples: 801` — *"and it
-  just learned from this episode."*
+  → `"learned": true`, log agent `ai_learned trainSamples: 801` — *"và nó vừa
+  học từ chính episode này."*
 
-### Scene 7 — Guardrail: the fleet circuit breaker (6:40–7:50) ⭐ trust scene
+### Cảnh 7 — Guardrail: fleet circuit breaker (6:40–7:50) ⭐ cảnh lòng tin
 
-- **Do:** inject `compressor_failure` on **two devices at once**
+- **Làm:** inject `compressor_failure` trên **hai thiết bị cùng lúc**
   (`FZ-004` + `FZ-005`).
-- **Wait ~4 min** → **CUT** → both incidents OPEN:
-  - FZ-004: `AUTO` — remediated
-  - FZ-005: **`HOLD` — "fleet circuit breaker: too many devices in ALARM —
-    auto-actions suspended, human review required"**
-- **Say:** *"Two dead compressors at once is probably a grid or a bad batch —
-  not twelve independent AI actions. The breaker suspends autonomy and asks
-  for a human. And it's LATCHED: when FZ-004 recovers, FZ-005 does NOT
-  quietly flip to AUTO — the hold stands until the episode is resolved."*
-  (This latched-HOLD is pinned by a regression test — it bit for real in
-  rehearsal.)
-- **The on-call beat (~20 s, the resolution of the held incident):** with
-  FZ-005 held, the human finishes it — **ACK** the incident → **dispatch
-  technician** (console Remediate; `technician_dispatched` event,
-  `issuedBy: sre-console`) → the device is fixed on site, and after 60 s
-  provably healthy the agent **auto-resolves** it (`system:recovery`) —
-  the operator's dispatch is in the trail. **Say:** *"The breaker didn't
-  just stop the AI — it handed the job to a human. One ack, one dispatch,
-  same audit trail. That's the whole resolution story: three paths — AUTO,
-  on-call, escalate — one door."*
-- Mention the other guardrails while on the AI Control page:
-  `minConfidence 0.85` (the same gate that decides whether an incident OPENS
-  at all), `maxEtaAlarmMinutes 45`, per-device 30-min cooldown, kill switch.
+- **Chờ ~4 phút** → **CẮT** → cả hai incident OPEN:
+  - FZ-004: `AUTO` — đã khắc phục
+  - FZ-005: **`HOLD` — "fleet circuit breaker: quá nhiều thiết bị trong ALARM —
+    tạm dừng hành động tự động, cần người review"**
+- **Nói:** *"Hai compressor chết cùng lúc nhiều khả năng là sự cố lưới điện
+  hoặc một lô hàng lỗi — chứ không phải mười hai hành động AI độc lập. Breaker
+  tạm dừng quyền tự chủ và gọi người. Và nó LATCHED: khi FZ-004 hồi phục,
+  FZ-005 KHÔNG âm thầm chuyển sang AUTO — trạng thái hold giữ nguyên cho tới
+  khi episode được xử lý."*
+  (LATCHED-HOLD này được một regression test giữ chặt — nó từng gây lỗi thật
+  trong lúc rehearsal.)
+- **Nhịp on-call (~20 s, phần khắc phục của incident bị hold):** khi FZ-005
+  đang hold, con người hoàn tất — **ACK** incident → **điều kỹ thuật viên**
+  (console Remediate; event `technician_dispatched`, `issuedBy: sre-console`)
+  → thiết bị được sửa tại chỗ, và sau 60 s chứng minh khỏe mạnh agent
+  **tự đóng** (`system:recovery`) — việc điều phối của operator nằm trong
+  audit trail. **Nói:** *"Breaker không chỉ chặn AI — nó trao việc cho con
+  người. Một cú ack, một lần điều phối, cùng một audit trail. Đó là toàn bộ
+  câu chuyện khắc phục: ba con đường — tự động, on-call, escalate — cùng một
+  cửa."*
+- Nhắc các guardrail khác khi đang ở trang AI Control:
+  `minConfidence 0.85` (chính cổng quyết định incident có MỞ hay không),
+  `maxEtaAlarmMinutes 45`, cooldown 30 phút mỗi thiết bị, kill switch.
 
-### Scene 8 — Datadog: dashboard → trace chain (7:50–8:45)
+### Cảnh 8 — Datadog: dashboard → chuỗi trace (7:50–8:45)
 
-> **Dashboard status (re-applied 2026-11-08 with a working PAT):** the
-> *"ColdTrace — Cold-chain Fleet Health"* dashboard + 3 monitors are **LIVE**
-> in the org — `./datadog/apply-datadog.sh` pushed them once `.env` carried a
-> valid `DD_APP_KEY` (personal access token). Re-run that script after any
-> `datadog/dashboard.json` change; metrics/logs/traces have been verified
-> flowing with 0 export errors.
+> **Tình trạng dashboard (áp dụng lại ngày 2026-11-08 với PAT hoạt động):**
+> dashboard *"ColdTrace — Cold-chain Fleet Health"* + 3 monitor đang **LIVE**
+> trong org — `./datadog/apply-datadog.sh` đã đẩy lên khi `.env` có
+> `DD_APP_KEY` (personal access token) hợp lệ. Chạy lại script đó sau mỗi lần
+> sửa `datadog/dashboard.json`; metrics/logs/traces đã được xác minh chạy với
+> 0 lỗi export.
 
-- **Show (opener):** the dashboard —
-  `app.ap1.datadoghq.com/dashboard/v9y-45k-jsz` — 10 widgets: temperature by
-  device with the −10/−14 °C threshold markers, AT_RISK/ALARM counters from
-  the Agent's MongoDB custom query, ingest latency + batch sizes, AI
-  decisions by classification, compressor-fail log stream. Say: *"the same
-  story a NOC would pin on the wall — every widget is the pipeline you just
-  watched, in production telemetry."*
-- **Show:** from the incident card → *"Open trace in Datadog"* → APM trace:
-  `mqtt.ingest → mongo.write → ai.decision`, one span per decision, with
-  `ai.top_factor.*` attributes.
-- **Show:** the same `traceId` in Log Explorer → logs correlated to the
-  trace. Say: *"one identifier follows the reading from the broker to the
-  database to the AI decision — this is the audit chain a food-safety
-  inspector would demand."*
+- **Chiếu (mở đầu):** dashboard — `app.ap1.datadoghq.com/dashboard/v9y-45k-jsz`
+  — 10 widget: nhiệt độ theo thiết bị với mốc −10/−14 °C, bộ đếm AT_RISK/ALARM
+  từ custom query MongoDB của Agent, ingest latency + batch size, quyết định AI
+  theo phân loại, log stream compressor-fail. Nói: *"đúng câu chuyện mà một
+  phòng NOC sẽ treo lên tường — mỗi widget là chính pipeline bạn vừa xem, trong
+  telemetry production."*
+- **Chiếu:** từ card incident → *"Open trace in Datadog"* → APM trace:
+  `mqtt.ingest → mongo.write → ai.decision`, mỗi quyết định một span, kèm
+  thuộc tính `ai.top_factor.*`.
+- **Chiếu:** cùng `traceId` trong Log Explorer → log liên kết với trace. Nói:
+  *"một định danh theo mẫu đọc từ broker tới database tới quyết định AI — đây
+  là chuỗi audit mà thanh tra an toàn thực phẩm sẽ đòi hỏi."*
 
-### Scene 9 — Compliance close + model health (8:45–9:30)
+### Cảnh 9 — Khép vòng tuân thủ + sức khỏe model (8:45–9:15)
 
-- **Show:** Compliance page → export the HACCP CSV:
-  `FZ-009, 19.1 min above −14 °C, worst −11.5, 2026-11-08 06:34 (local ICT)`
-  — *"minutes above threshold computed from actual sample deltas, the last
-  excursion in the auditor's timezone — this is the document that goes in
-  the HACCP binder."*
-- **20 s:** Model Health card (100% accuracy, 1,100 fresh windows, clean
-  confusion matrix) — *"scored on windows rendered from the same simulator
-  physics the fleet runs on — measured, not stored."*
-- **10 s:** Events page — the full audit trail you just created on camera.
+- **Chiếu:** trang Compliance → export CSV HACCP:
+  `FZ-009, 19.1 min trên −14 °C, xấu nhất −11.5, 2026-11-08 06:34 (giờ ICT)`
+  — *"số phút trên ngưỡng tính từ delta mẫu thật, excursion cuối cùng theo múi
+  giờ của thanh tra — đây là tài liệu đưa vào hồ sơ HACCP."*
+- **20 s:** card Model Health (100% accuracy, 1.100 cửa sổ mới, confusion
+  matrix sạch) — *"chấm trên cửa sổ render từ đúng vật lý simulator mà fleet
+  đang chạy — đo, không lưu sẵn."*
+- **10 s:** trang Events — toàn bộ audit trail bạn vừa tạo trên hình.
 
-### Scene 10 — Resolution paths recap + the AI that knows when to stop (9:15–9:45) ⭐ trust
+### Cảnh 10 — Tóm tắt ba con đường khắc phục + AI biết dừng đúng lúc (9:15–9:45) ⭐ lòng tin
 
-Fast montage (30 s), three cards on screen — the three actions, one line each:
+Montage nhanh (30 s), ba card trên màn hình — ba hành động, mỗi cái một câu:
 
-| Path | Line |
+| Con đường | Câu |
 |---|---|
-| **A — AUTO** | *"Restarted itself in 38 ms — because you approved that class and the gates passed."* |
-| **B — ON-CALL** | *"Couldn't fix it? Paged a human with the fix already written: one ack, one dispatch."* |
-| **C — ESCALATE** | *"Two at once? It stopped, and asked a person to look at the fleet."* |
+| **A — TỰ ĐỘNG** | *"Tự restart trong 38 ms — vì bạn đã duyệt class đó và mọi cổng đều đạt."* |
+| **B — ON-CALL** | *"Không sửa được? Gọi người trực kèm cách sửa viết sẵn: một cú ack, một lần điều phối."* |
+| **C — ESCALATE** | *"Hai cái cùng lúc? Nó dừng lại, và nhờ người xem xét cả fleet."* |
 
-Then the A′ beat, from the incident card (or Q&A ammo if you cut it):
-`escalationNote` visible — *"restart FAILED 2× — thermal overload latched —
-manual action: reboot"* → **Say:** *"The AI tried twice, then did what a good
-SRE does: stopped, paged a human, and wrote down everything they'd need.
-Escalation isn't the system failing — it's the system working."*
+Rồi nhịp A′, từ card incident (hoặc để dành trả lời Q&A nếu bạn cắt bớt):
+hiện rõ `escalationNote` — *"restart THẤT BẠI 2 lần — quá tải nhiệt latched —
+hành động thủ công: reboot"* → **Nói:** *"AI thử hai lần, rồi làm đúng việc
+một SRE giỏi: dừng lại, gọi người, và viết xuống mọi thứ họ cần. Escalate
+không phải là hệ thống hỏng — đó là hệ thống đang chạy đúng."*
 
-### Scene 11 — Outro (9:45–10:00)
+### Cảnh 11 — Kết (9:45–10:00)
 
-- **Say:** *"Detect in minutes, explain itself, act inside guardrails, prove
-  recovery, and know when to hand over. That's ColdTrace."* + repo/QR if wanted.
+- **Nói:** *"Phát hiện trong vài phút, tự giải thích, hành động trong khuôn
+  khổ guardrail, chứng minh đã hồi phục, và biết khi nào phải bàn giao. Đó là
+  ColdTrace."* + repo/QR nếu muốn.
 
 ---
 
+## 4. AI thực sự làm gì (bản đồ năng lực — dùng làm B-roll/lời thuyết minh)
 
-## 4. What the AI actually does (the capability map — use as B-roll/narration)
-
-| # | Capability | Where it shows in the video |
+| # | Năng lực | Xuất hiện ở đâu |
 |---|---|---|
-| 1 | **Classify** 5 fault classes (softmax over 13 features, warm-started on simulator physics) | Scene 3 — conf 1.00 |
-| 2 | **Gate on confidence** — incident only OPENS above the operator's `minConfidence` (0.85), same gate as autonomy | Scene 3/6 — "no noise, no 0.58-confidence ghosts" |
-| 3 | **Forecast ETA** to the −10 °C spoilage line; HOLD if it's beyond the horizon (45 min) | Scene 5 — "ETA 35 min, inside guardrail" |
-| 4 | **Explain**: topFactors (weight × z per feature) rendered as bars | Scene 3 |
-| 5 | **Root-cause** with an LLM grounded in real window stats (template fallback if the API is down) | Scene 4 |
-| 6 | **Remember**: cosine similarity over past incident vectors → "similar incidents" | Scene 4 |
-| 7 | **Decide within guardrails**: class approval, confidence, ETA, cooldown, fleet circuit breaker, kill switch | Scenes 5–6 |
-| 8 | **Act**: MQTT `compressor_restart` with a full command lifecycle (QUEUED→SENT→ACKED, 0–38 ms) | Scene 5 |
-| 9 | **Prove recovery**: 60 s healthy streak → auto-resolve `system:recovery` | Scene 5 ⭐ |
-| 10 | **Learn**: operator feedback → `Learn()` retrains, `trainSamples: 801` | Scene 5 kicker |
-| 11 | **Full-chain tracing**: one `traceId` broker → DB → decision → Datadog | Scene 7 |
-| 12 | **Handle its own failure** ⭐: a refused restart (device acks `ok:false`) → retry after backoff → escalate to on-call with a pre-drafted page — never loops, never sits quiet | Scene 7 B-roll / Q&A |
+| 1 | **Phân loại** 5 class sự cố (softmax trên 13 đặc trưng, warm-start từ vật lý simulator) | Cảnh 3 — conf 1.00 |
+| 2 | **Cổng độ tin cậy** — incident chỉ MỞ khi vượt `minConfidence` của operator (0.85), cùng cổng với quyền tự chủ | Cảnh 3/6 — "không nhiễu, không có bóng ma 0,58" |
+| 3 | **Dự báo ETA** tới ngưỡng −10 °C; HOLD nếu vượt chân trời (45 phút) | Cảnh 5 — "ETA 35 phút, trong guardrail" |
+| 4 | **Giải thích**: topFactors (weight × z mỗi đặc trưng) vẽ dạng thanh | Cảnh 3 |
+| 5 | **Nguyên nhân gốc** bằng LLM dựa trên số liệu cửa sổ thật (fallback template nếu API chết) | Cảnh 4 |
+| 6 | **Ghi nhớ**: cosine similarity trên vector sự cố cũ → "similar incidents" | Cảnh 4 |
+| 7 | **Quyết định trong guardrail**: duyệt class, độ tin cậy, ETA, cooldown, fleet circuit breaker, kill switch | Cảnh 5–6 |
+| 8 | **Hành động**: MQTT `compressor_restart` với command lifecycle đầy đủ (QUEUED→SENT→ACKED, 0–38 ms) | Cảnh 5 |
+| 9 | **Chứng minh hồi phục**: chuỗi 60 s khỏe mạnh → tự đóng `system:recovery` | Cảnh 5 ⭐ |
+| 10 | **Học**: feedback của operator → `Learn()` huấn luyện lại, `trainSamples: 801` | Cảnh 5 đoạn kết |
+| 11 | **Tracing toàn chuỗi**: một `traceId` broker → DB → quyết định → Datadog | Cảnh 7 |
+| 12 | **Tự xử lý thất bại của chính mình** ⭐: restart bị từ chối (thiết bị ack `ok:false`) → retry sau backoff → escalate lên on-call với trang thông tin soạn sẵn — không lặp vô hạn, không ngồi im | Cảnh 7 B-roll / Q&A |
 
-### The fault signatures — why "temperature change speed" IS the classifier
+### Dấu vết sự cố — vì sao "tốc độ đổi nhiệt" CHÍNH LÀ bộ phân loại
 
-Each fault class has a characteristic ramp (`internal/sim/device.go`), and
-the model's dominant features are all speed features (`trend_lag_cpm`,
-`net_trend_cpm`, `slope_cpm` — the top weights on any real decision):
+Mỗi class sự cố có tốc độ leo nhiệt đặc trưng (`internal/sim/device.go`), và
+các đặc trưng mạnh nhất của model đều là đặc trưng tốc độ (`trend_lag_cpm`,
+`net_trend_cpm`, `slope_cpm` — trọng số cao nhất trong mọi quyết định thật):
 
-| Fault class | Temp-speed signature | What finishes the discrimination | Remote fix? |
+| Class sự cố | Dấu vết tốc độ nhiệt | Tín hiệu phân biệt dứt điểm | Sửa từ xa được? |
 |---|---|---|---|
-| `compressor_failure` | **+0.3 °C/min** ramp | compressor stops, power draw present | ✅ `compressor_restart` |
-| `door_left_open` | **+0.1 °C/min** ramp | `doorOpen: true`, compressor pulling hard | ❌ staff close it |
-| `sensor_drift` | **−0.25 °C/min** *reported* (sensor under-reads) | compressor normal, neighbours cold | ❌ replace probe |
-| `power_outage` | warm ramp ≈ compressor's | **power draw zero** — everything dead | ❌ restore power on site |
-| healthy | ±~1.4 °C thermostat sawtooth | no sustained ramp, full window | — |
+| `compressor_failure` | leo **+0.3 °C/phút** | compressor dừng, vẫn có công suất điện | ✅ `compressor_restart` |
+| `door_left_open` | leo **+0.1 °C/phút** | `doorOpen: true`, compressor chạy hết công suất | ❌ nhân viên đóng cửa |
+| `sensor_drift` | **−0.25 °C/phút** theo *số đọc* (cảm biến báo thấp hơn thực) | compressor bình thường, các tủ cạnh bên lạnh | ❌ thay đầu dò |
+| `power_outage` | leo ấm ≈ compressor chết | **công suất điện bằng 0** — mọi thứ chết | ❌ khôi phục điện tại chỗ |
+| healthy | dao động ±~1.4 °C (răng cưa thermostat) | không leo liên tục, cửa sổ đầy đủ | — |
 
-**Narration line:** *"Every failure has a fingerprint in how fast — and how
-honestly — the temperature moves. Speed alone splits three classes; the
-other two need the cross-signals, and `etaAlarmMin` is just
-`(alarm − temp) / ramp` — the model doing division so it can tell you
-there's time to act."*
+**Câu thuyết minh:** *"Mỗi sự cố có một dấu vân tay ở tốc độ — và mức độ trung
+thực — của nhiệt độ. Chỉ riêng tốc độ tách được ba class; hai class còn lại
+cần tín hiệu chéo, và `etaAlarmMin` chỉ là `(ngưỡng − nhiệt) / tốc độ` — model
+làm phép chia để nói cho bạn biết còn kịp hành động."*
 
-### The resolution playbook — the three action paths you demo
+### Sổ tay khắc phục — ba con đường hành động bạn trình diễn
 
-The video's through-line is RESOLUTION: something breaks → one of three
-actions fixes it. Every path leaves the same audit trail (commands +
-events), which is the point: **AI and humans act through one door.**
+Xuyên suốt video là KHẮC PHỤC: có thứ gì đó hỏng → một trong ba hành động sửa
+nó. Mọi con đường đều để lại cùng một audit trail (commands + events), và đó
+chính là điểm mấu chốt: **AI và con người hành động qua cùng một cửa.**
 
-| Path | When | Decision | The action (demo this) | Audit evidence on camera |
+| Con đường | Khi nào | Quyết định | Hành động (quay cái này) | Bằng chứng audit trên hình |
 |---|---|---|---|---|
-| **A — AUTO** *(restart)* | approved class + conf ≥ 0.85 + ETA ≤ 45 + breaker clear | `AUTO` | AI issues `compressor_restart` itself → device ACKED ~12 ms → temp pulls down → 60 s healthy streak | `QUEUED→SENT→ACKED`, `remediatedBy: ai-agent`, `resolvedBy: system:recovery` |
-| **B — ON-CALL** *(human dispatch)* | unapproved class, or first-of-kind, or ETA > 45 | `HOLD` / `PROPOSED` | Operator **ACKs** → **dispatches technician** (console Remediate → `technician_dispatched`) → device fixed on site → recovery | `acknowledged: true`, event `technician_dispatched`, command `issuedBy: sre-console`, resolve + `feedback` |
-| **C — ESCALATE** *(breaker)* | ≥2 devices faulting at once | `HOLD` (latched per episode) | Autonomy suspended → human reviews the fleet → acts per device | `circuitBreaker: true`, "repeat actions blocked by cooldown" |
+| **A — TỰ ĐỘNG** *(restart)* | class đã duyệt + conf ≥ 0.85 + ETA ≤ 45' + breaker sạch | `AUTO` | AI tự gửi `compressor_restart` → thiết bị ACKED ~12 ms → nhiệt kéo xuống → chuỗi 60 s khỏe | `QUEUED→SENT→ACKED`, `remediatedBy: ai-agent`, `resolvedBy: system:recovery` |
+| **B — ON-CALL** *(điều người)* | class chưa duyệt, hoặc lần đầu gặp, hoặc ETA > 45' | `HOLD` / `PROPOSED` | Operator **ACK** → **điều kỹ thuật viên** (console Remediate → `technician_dispatched`) → sửa tại chỗ → hồi phục | `acknowledged: true`, event `technician_dispatched`, lệnh `issuedBy: sre-console`, resolve + `feedback` |
+| **C — ESCALATE** *(breaker)* | ≥2 thiết bị hỏng cùng lúc | `HOLD` (giữ suốt episode) | Tạm dừng tự chủ → người review cả fleet → xử lý từng thiết bị | `circuitBreaker: true`, "repeat actions blocked by cooldown" |
 
-Exact calls for path B (the one that needs a human):
+Lệnh chính xác cho con đường B (con đường cần người):
 
 ```bash
-INCIDENT_ID=<from the incident card>
-curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/ack -H 'X-Operator: on-call'  # take it (no body)
-curl -X POST localhost:8099/devices/FZ-005/remediate                               # dispatch technician (no body)
-# …device fixed on site, temp recovers. After 60 s provably healthy the agent
-#   AUTO-RESOLVES it (resolvedBy system:recovery) — or close it yourself, no body:
+INCIDENT_ID=<lấy từ card incident>
+curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/ack -H 'X-Operator: on-call'  # nhận xử lý (không body)
+curl -X POST localhost:8099/devices/FZ-005/remediate                               # điều kỹ thuật viên (không body)
+# …thiết bị được sửa tại chỗ, nhiệt hồi phục. Sau 60 s chứng minh khỏe mạnh agent
+#   TỰ ĐÓNG (resolvedBy system:recovery) — hoặc tự đóng tay, không body:
 curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/resolve -H 'X-Operator: on-call'
 curl -X POST localhost:8092/api/incidents/$INCIDENT_ID/feedback \
      -H 'Content-Type: application/json' -d '{"resolvedClass":"door_left_open"}'   # → learned: true
 ```
 
-**Say:** *"When the AI can act, it acts — and shows the receipt. When it
-can't, a human is on-call: one ack, one dispatch, the same audit trail.
-Three paths, one door, nothing happens off the record."*
+**Nói:** *"Khi AI làm được, nó làm — và đưa hoá đơn. Khi không làm được, có
+người trực: một cú ack, một lần điều phối, cùng một audit trail. Ba con đường,
+một cửa, không có gì xảy ra ngoài sổ sách."*
 
-### Path A′ — when AUTO itself fails (the agentic-failure scene)
+### Con đường A′ — khi chính TỰ ĐỘNG thất bại (cảnh agentic-failure)
 
-The restart is a command, and commands can be **refused by the device** —
-a latched thermal overload (`compressor_failure_hard`) acks `ok:false` and
-the fault STANDS. The agent does not loop and does not sit on
-"awaiting recovery":
+Restart là một lệnh, và lệnh có thể **bị thiết bị từ chối** — quá tải nhiệt
+latched (`compressor_failure_hard`) ack `ok:false` và sự cố VẪN CÒN. Agent
+không lặp vô hạn và không ngồi chờ "awaiting recovery":
 
-1. restart #1 → **REFUSED** (command `FAILED`, device ack in `ackDetail`)
-2. 30 s backoff → **retry #2** → REFUSED again
-3. → **ESCALATED to on-call**: incident gets `escalated: true` +
-   `escalationNote` (class, confidence, ETA, the refusal, the manual
-   action, the closest past episode) and the audit log gets a
-   **critical** `incident_escalated` page. A human power-cycles the
-   controller (`reboot`) — the exact action the note prescribes.
+1. restart lần 1 → **BỊ TỪ CHỐI** (lệnh `FAILED`, lý do trong `ackDetail`)
+2. chờ 30 s → **retry lần 2** → lại BỊ TỪ CHỐI
+3. → **ESCALATE lên on-call**: incident nhận `escalated: true` +
+   `escalationNote` (class, độ tin cậy, ETA, lý do từ chối, hành động thủ
+   công, episode tương tự gần nhất) và audit log nhận trang
+   `incident_escalated` mức **critical**. Con người power-cycle controller
+   (`reboot`) — đúng hành động mà note chỉ ra.
 
 ```bash
 curl -X POST localhost:8092/api/demo/inject -H 'Content-Type: application/json' \
-     -d '{"deviceId":"FZ-005","fault":"compressor_failure_hard"}'      # the failure that fights back
-# …detect → AUTO → restart REFUSED → retry → REFUSED → ESCALATED (~1 min after detect)
+     -d '{"deviceId":"FZ-005","fault":"compressor_failure_hard"}'      # sự cố chống lại ta
+# …phát hiện → AUTO → restart BỊ TỪ CHỐI → retry → BỊ TỪ CHỐI → ESCALATE (~1 phút sau phát hiện)
 curl -X POST localhost:8092/api/devices/FZ-005/commands -H 'Content-Type: application/json' \
-     -H 'X-Operator: on-call' -d '{"action":"reboot"}'                 # the human fix the page prescribed
+     -H 'X-Operator: on-call' -d '{"action":"reboot"}'                 # cách sửa của người, đúng như trang thông tin ghi
 ```
 
-**Say:** *"The AI tried twice, then did what a good SRE does: stopped,
-paged a human, and wrote down everything they'd need — the class, the
-confidence, how long until damage, what the device said, and the fix.
-Escalation isn't failure of the system; it's the system working."*
+**Nói:** *"AI thử hai lần, rồi làm đúng việc một SRE giỏi: dừng lại, gọi người,
+và viết xuống mọi thứ họ cần — class, độ tin cậy, còn bao lâu tới hư hỏng,
+thiết bị nói gì, và cách sửa. Escalate không phải hệ thống thất bại; đó là hệ
+thống đang chạy đúng."*
 
 ---
 
-## 5. Editing: hiding the waits
+## 5. Dựng phim: giấu thời gian chờ
 
-Detection is real physics — **~2.5–4 min** from inject to incident, and the
-auto-resolve needs another ~2–3 min. Never make the viewer watch that.
+Phát hiện là vật lý thật — **~2,5–4 phút** từ inject tới incident, và tự đóng
+cần thêm **~2–3 phút**. Đừng bao giờ để người xem ngồi nhìn.
 
-| Trick | How |
+| Mẹo | Cách làm |
 |---|---|
-| **Hard cut + clock overlay** | Cut inject → incident. Overlay "T+3:10" text (OBS text or CapCut sticker) so the cut is honest |
-| **Speed ramp** | 8–12× time-lapse of the fleet grid while the tile warms — shows the physics AND keeps pace |
-| **Narration over the cut** | Explain the status ladder / guardrails while the time-lapse plays |
-| **Scene 6 is the only long one** | The AUTO→ACKED→recover→RESOLVED chain needs ~5 min real time; record it in one take with a 10× ramp, then trim |
+| **Cắt cứng + overlay đồng hồ** | Cắt từ inject → incident. Chèn chữ "T+3:10" (text OBS hoặc sticker CapCut) để cú cắt trung thực |
+| **Tăng tốc** | Time-lapse 8–12× lưới fleet trong lúc tile ấm lên — vừa thấy vật lý vừa giữ nhịp |
+| **Thuyết minh đè lên cú cắt** | Giải thích thang trạng thái / guardrail trong lúc chạy time-lapse |
+| **Cảnh 6 là cảnh duy nhất dài** | Chuỗi AUTO→ACKED→hồi phục→RESOLVED cần ~5 phút thật; quay một mạch với ramp 10×, rồi cắt gọn |
 
 ---
 
-## 6. Fallbacks (so the recording cannot die)
+## 6. Phương án dự phòng (để buổi quay không thể chết)
 
-| If this fails | Do this |
+| Nếu cái này hỏng | Làm thế này |
 |---|---|
-| LLM RCA not ready | Template engine answers with the same shape — narrate it as the designed fallback ("keyless mode") |
-| Detection > 5 min | Windows weren't warm: `POST /api/demo/reset` → wait 7 full minutes → re-inject. Never re-inject without resetting |
-| Wrong class classified | Keep it! Show `ai_class_flip` + the anchored-episode dedup ("one episode per device, the anchor stands") — it's a feature |
-| Incident won't open (conf < 0.85) | That's the gate working; inject on a different device or narrate the confidence gate |
-| Datadog slow | The trace is stored on the incident doc (`traceId`) — open it after recording, splice the clip |
-| Stack broken | `scripts/demo_preflight.sh` prints the exact fix for each check — run it on camera if you must (it's honest ops) |
+| LLM RCA chưa sẵn sàng | Engine template trả lời cùng định dạng — thuyết minh đó là fallback được thiết kế ("keyless mode") |
+| Phát hiện > 5 phút | Cửa sổ chưa ấm: `POST /api/demo/reset` → chờ đủ 7 phút → inject lại. Không bao giờ inject lại mà không reset |
+| Phân loại sai class | Giữ nguyên! Chiếu `ai_class_flip` + dedup anchored-episode ("một episode mỗi thiết bị, anchor đứng yên") — đó là tính năng |
+| Incident không mở (conf < 0.85) | Đó là cổng đang chạy đúng; inject thiết bị khác hoặc thuyết minh về cổng độ tin cậy |
+| Datadog chậm | Trace lưu trên doc incident (`traceId`) — mở sau khi quay, ghép clip vào |
+| Stack hỏng | `scripts/demo_preflight.sh` in ra cách sửa chính xác cho từng mục — cứ quay cảnh chạy nó nếu cần (đó là vận hành trung thực) |
 
 ---
 
-## 7. Shooting order — record sequence ≠ scene order (one 40-min session)
+## 7. Thứ tự quay — trình tự quay ≠ thứ tự cảnh (một buổi ~40 phút)
 
-Detection waits and window warm-ups make naive scene-order recording waste
-hours. Record in this sequence instead, then cut into scene order:
+Thời gian chờ phát hiện và chờ cửa sổ ấm khiến quay theo thứ tự cảnh tốn hàng
+giờ. Hãy quay theo trình tự này, rồi cắt thành thứ tự cảnh:
 
-| Step | Record (wall clock) | Becomes scene |
+| Bước | Quay (đồng hồ thực) | Thành cảnh |
 |---|---|---|
-| 1 (T+0) | `demo_cleanup.sh` → `demo_preflight.sh` on camera (12/12 green) — then **start the 7-min warm-up timer and record Scene 1 + Scene 2 narration** | 1, 2 |
-| 2 (T+7) | Inject `power_outage` FZ-006 → **while it warms, record Scene 3** (History tier flip + Mongo story — needs no fault) **and the AI-Control guardrails walkthrough** | 3, 7 (guardrails half) |
-| 3 (T+11) | FZ-006 opens → record the incident card, topFactors, **Explain → RCA**, similar-incidents, PROPOSED reason | 4, 5 |
-| 4 (T+15) | Inject `compressor_failure` FZ-002 (class already approved) → record the fleet grid AT_RISK/ALARM transition narration | 2 (transition), 6 setup |
-| 5 (T+19) | AUTO card appears → record decision/gates → **Commands: QUEUED→SENT→ACKED ~12 ms** → tile recovers | 6 |
-| 6 (T+24) | **Keep rolling through the auto-resolve** (2–3 min — speed-ramp it later) → `system:recovery` flips the card → feedback → `learned: true` | 6 (the close of the loop) |
-| 7 (T+27) | Inject FZ-004 **and** FZ-005 → record the Events/Compliance walkthrough while they warm | 9 |
-| 8 (T+31) | Both open → record FZ-004 AUTO vs FZ-005 **HOLD latched** (+ one beat showing FZ-005 still HOLD after FZ-004 resolves) → then the **on-call close**: ACK FZ-005 → dispatch technician (console Remediate) → recovery → `system:recovery` | 7 |
-| 9 (T+35) | From an incident card → **Open trace in Datadog** → span chain + log correlation by trace_id | 8 |
-| 10 (T+38) | Compliance page → CSV export (seeded FZ-009 row) → Model Health (100%, 1,100 windows) → outro narration | 9, 10 |
-| 11 (T+40) | `demo_cleanup.sh` + `demo_preflight.sh` again if you need pickup takes — **but re-wait 7 min before any new inject** | pickups |
+| 1 (T+0) | `demo_cleanup.sh` → `demo_preflight.sh` trên hình (12/12 xanh) — rồi **bật đồng hồ 7 phút warm-up và quay thuyết minh Cảnh 1 + Cảnh 2** | 1, 2 |
+| 2 (T+7) | Inject `power_outage` FZ-006 → **trong lúc chờ, quay Cảnh 3** (đổi tầng History + câu chuyện Mongo — không cần sự cố) **và phần walkthrough guardrail ở AI-Control** | 3, 7 (nửa guardrail) |
+| 3 (T+11) | FZ-006 OPEN → quay card incident, topFactors, **Explain → RCA**, similar-incidents, lý do PROPOSED | 4, 5 |
+| 4 (T+15) | Inject `compressor_failure` FZ-002 (class đã duyệt) → quay thuyết minh chuyển trạng thái AT_RISK/ALARM trên lưới | 2 (chuyển cảnh), 6 (chuẩn bị) |
+| 5 (T+19) | Card AUTO xuất hiện → quay decision/gates → **Commands: QUEUED→SENT→ACKED ~12 ms** → tile hồi phục | 6 |
+| 6 (T+24) | **Quay liền mạch qua lúc tự đóng** (2–3 phút — ramp tốc độ sau) → `system:recovery` lật card → feedback → `learned: true` | 6 (khép vòng lặp) |
+| 7 (T+27) | Inject FZ-004 **và** FZ-005 → quay walkthrough Events/Compliance trong lúc chờ | 9 |
+| 8 (T+31) | Cả hai OPEN → quay FZ-004 AUTO vs FZ-005 **HOLD latched** (+ một nhịp cho thấy FZ-005 vẫn HOLD sau khi FZ-004 hồi phục) → rồi **khép bằng on-call**: ACK FZ-005 → điều kỹ thuật viên (console Remediate) → hồi phục → `system:recovery` | 7 |
+| 9 (T+35) | Từ card incident → **Open trace in Datadog** → chuỗi span + log tương quan theo trace_id | 8 |
+| 10 (T+38) | Trang Compliance → export CSV (dòng FZ-009 seed sẵn) → Model Health (100%, 1.100 cửa sổ) → thuyết minh kết | 9, 10 |
+| 11 (T+40) | `demo_cleanup.sh` + `demo_preflight.sh` lần nữa nếu cần quay bù — **nhưng chờ lại 7 phút trước mọi lần inject mới** | quay bù |
 
-Why this order works: every inject happens with warm windows; every wait is
-filled with a scene that needs no live fault; the auto-resolve (longest real
-wait) records last so a failure there doesn't sink earlier scenes.
+Vì sao thứ tự này hiệu quả: mọi lần inject đều khi cửa sổ đã ấm; mọi khoảng
+chờ đều được lấp bằng cảnh không cần sự cố trực tiếp; phần tự đóng (chờ lâu
+nhất) quay cuối để nếu hỏng cũng không kéo đổ các cảnh trước.
 
 ---
 
-## 8. Record-of-truth: numbers to quote (measured this rehearsal)
+## 8. Sổ số liệu: những con số được phép trích dẫn (đo trong buổi rehearsal này)
 
-- Detection: **148–255 s** warm windows, **387 s** from a cold window
-  (FZ-002/011 today: 243–255 s post-fix)
-- Confidence at detection: **0.90–1.00** (FZ-002 0.908 / ETA 44.8 min —
-  gate-relevant; FZ-011 0.995 / ETA 34.8)
-- Command ACK latency: **0–12 ms** (re-verified after the ops-api
-  reconnect fix — a forced broker restart no longer rots commands to
-  TIMEOUT; `set_fault` ACKED 0 ms across the reset)
-- Auto-resolve: **~91–373 s** after remediation (`system:recovery`)
-- Agentic failure handling: hard restart **refused → retry after 30 s
-  backoff → refused → escalated** in under ~90 s from detection, with the
-  pre-drafted `escalationNote` + critical `incident_escalated` event —
-  then the on-call `reboot` (exactly what the note prescribed) closes it
-- Circuit breaker: FZ-004 AUTO + FZ-005 **HOLD latched** — verified it does
-  NOT flip when FZ-004 resolves
-- On-call path (path B): `incident_ack` → `technician_dispatched` → device
-  fix → `system:recovery` — the full human-resolution audit chain, verified
-  end-to-end
-- Model eval: **100%**, 1,100 fresh simulator windows, 5 classes
-- Compliance CSV: 19.1 min excursion, worst −11.5 °C, local-time column
-- Preflight: **12/12 checks green** before every recording session
+- Phát hiện: **148–255 s** khi cửa sổ ấm, **387 s** khi cửa sổ nguội
+  (hôm nay FZ-002/011: 243–255 s sau khi sửa)
+- Độ tin cậy khi phát hiện: **0.90–1.00** (FZ-002 0.908 / ETA 44.8 phút —
+  sát cổng; FZ-011 0.995 / ETA 34.8)
+- Độ trễ ACK lệnh: **0–12 ms** (xác minh lại sau khi sửa lỗi reconnect của
+  ops-api — restart broker cưỡng bức không còn làm lệnh rot thành TIMEOUT;
+  `set_fault` ACKED 0 ms xuyên qua lần reset)
+- Tự đóng: **~91–373 s** sau khi khắc phục (`system:recovery`)
+- Xử lý thất bại của agent: restart cứng **bị từ chối → retry sau 30 s
+  backoff → bị từ chối → escalate** trong chưa tới ~90 s từ lúc phát hiện,
+  kèm `escalationNote` soạn sẵn + event `incident_escalated` mức critical —
+  rồi on-call chạy `reboot` (đúng như note chỉ ra) để đóng lại
+- Circuit breaker: FZ-004 AUTO + FZ-005 **HOLD latched** — đã xác minh nó
+  KHÔNG lật khi FZ-004 hồi phục
+- Con đường on-call (B): `incident_ack` → `technician_dispatched` → sửa thiết
+  bị → `system:recovery` — toàn bộ chuỗi audit khắc phục bởi con người, đã
+  xác minh đầu-cuối
+- Model eval: **100%**, 1.100 cửa sổ simulator mới, 5 class
+- CSV Compliance: 19.1 phút excursion, xấu nhất −11.5 °C, cột giờ địa phương
+- Preflight: **12/12 kiểm tra xanh** trước mọi buổi quay
