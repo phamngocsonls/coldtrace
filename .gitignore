@@ -3,8 +3,12 @@ bin/
 *.log
 .DS_Store
 
-fleet-simulator
-initdb
+# Compiled binaries at the repo root (built by `go build -o fleet-simulator`
+# etc). The leading slash pins these to the root: without it the patterns also
+# ignore the SOURCE directories cmd/fleet-simulator/ and tools/initdb/, which
+# silently ships a repo that cannot build.
+/fleet-simulator
+/initdb
 
 # Ops console (Next.js on Bun)
 ops-console/node_modules/
