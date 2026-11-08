@@ -266,7 +266,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="l">Tín hiệu phát hiện sớm <strong>đã có sẵn</strong> trong dữ liệu cảm biến. Vấn đề không phải thiếu dữ liệu, cũng không phải thiếu công cụ — mà là <em>không thể cắt cử người trực từng giây cho hàng chục dàn lạnh</em>. ColdTrace đảm nhận phần trực đó: đọc tín hiệu, quyết định và xử lý — kể cả lúc nửa đêm.</div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>02 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>01 / 14</span></div>
 </section>
 
 <!-- ============================ 3. SOLUTION ============================ -->
@@ -277,7 +277,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
     <div class="cols c4">
       <div class="card"><div class="t green">① PHÁT HIỆN</div><div class="l">Slope nhiệt qua <code>$setWindowFields</code> · +0.10 °C/min = AT_RISK · dự báo ETA tới ngưỡng</div></div>
       <div class="card"><div class="t blue">② ĐIỀU TRA</div><div class="l">Trace deep-link từ incident · RCA bằng LLM trên dữ liệu thật · incident memory tìm case tương tự</div></div>
-      <div class="card"><div class="t amber">③ XỬ LÝ</div><div class="l">Policy gate (conf, ETA, cooldown, circuit breaker) → lệnh MQTT → ACK → xác nhận hồi phục</div></div>
+      <div class="card"><div class="t amber">③ XỬ LÝ</div><div class="l">Policy gate (conf, ETA, cooldown, circuit breaker) → lệnh MQTT → ACK → xác nhận hồi phục · <strong>thiết bị từ chối thì retry rồi escalate lên on-call</strong></div></div>
       <div class="card"><div class="t purple">④ HỌC</div><div class="l">60s khỏe mạnh → tự resolve · feedback của operator huấn luyện lại classifier</div></div>
     </div>
     <div class="cols c23" style="margin-top:.2em">
@@ -287,11 +287,11 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
       <div class="card">
         <div class="t">Kết quả</div>
-        <div class="l"><span class="green mono">15s</span> từ lệnh đến thiết bị OK · <span class="green mono">~6 phút</span> tự đóng incident · <span class="green mono">0</span> false positive trên fleet khỏe</div>
+        <div class="l"><span class="green mono">38 ms</span> ACK lệnh sửa · <span class="green mono">2–4 phút</span> từ inject tới incident · <span class="green mono">~3 phút</span> tự đóng incident · <span class="green mono">0</span> false positive trên fleet khỏe</div>
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>03 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>02 / 14</span></div>
 </section>
 
 <!-- ============================ 4. ARCHITECTURE ============================ -->
@@ -312,7 +312,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <span class="muted">vẽ bằng Archify</span>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>04 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>03 / 14</span></div>
 </section>
 
 <!-- ============================ 5. MONGODB ============================ -->
@@ -350,7 +350,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>05 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>04 / 14</span></div>
 </section>
 
 <!-- ============================ 6. DATADOG ============================ -->
@@ -363,7 +363,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
         <h3>Telemetry ngữ cảnh</h3>
         <ul class="clean p" style="margin-top:.5em">
           <li><strong>Metrics</strong> app OTLP (temp, latency, ingest, errors) + <strong>custom query agent</strong> trên MongoDB — rollup fleet <em>độc lập</em> với app</li>
-          <li><strong>APM / Tracing</strong> — trace xuyên suốt MQTT→gateway→Mongo→AI, span <code>ai.decision</code> kèm factor attributes</li>
+          <li><strong>APM / Tracing</strong> — trace xuyên suốt MQTT→gateway→Mongo→AI, span <code>ai.decision</code> kèm factor attributes · <strong>span metrics connector</strong> biến span thành metric (<code>ai.decision</code>) để vẽ dashboard</li>
           <li><strong>Logs</strong> — OTLP có <code>trace_id</code>/<code>span_id</code>, correlate được với trace</li>
           <li><strong>Anomaly Detection</strong> — monitor drift dùng thuật toán anomaly của Datadog</li>
         </ul>
@@ -371,7 +371,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div>
         <h3>Cái gì đang chạy</h3>
         <div class="stats" style="margin-top:.5em">
-          <div class="stat"><div class="v green">11</div><div class="n">widget dashboard<br><span class="mono">v9y-45k-jsz</span></div></div>
+          <div class="stat"><div class="v green">10</div><div class="n">widget dashboard<br><span class="mono">v9y-45k-jsz</span></div></div>
           <div class="stat"><div class="v purple">3</div><div class="n">monitors<br>ngưỡng · anomaly · fleet</div></div>
           <div class="stat"><div class="v blue">4</div><div class="n">năng lực bổ sung<br>APM · Logs · Tracing · Anomaly</div></div>
         </div>
@@ -382,7 +382,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>06 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>05 / 14</span></div>
 </section>
 
 <!-- ============================ 7. DIFFERENTIATOR ============================ -->
@@ -411,9 +411,19 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
         <div class="l">Model luyện trên generator viết tay, chấm trên simulator → đẹp offline, sai khi chạy live.</div>
         <div class="l green" style="margin-top:.4em">→ Warm-start <em>và</em> seed incident memory từ chính simulator. Cosine match <strong>0.956–0.996</strong>.</div>
       </div>
+      <div class="card">
+        <div class="t red">⑤ QoS-1 giao lại làm sập mọi biểu đồ</div>
+        <div class="l">MQTT QoS 1 là at-least-once: một lần broker gửi lại ghi trùng <code>(deviceId, ts)</code> cho 6 thiết bị → <code>$fill</code>/<code>$setWindowFields</code> bắt buộc sortBy duy nhất → <strong>500 toàn bộ series chart</strong>.</div>
+        <div class="l green" style="margin-top:.4em">→ <code>DedupByTS()</code> ($group theo deviceId+ts) chèn sau $match ở cả 5 pipeline. Time-series không cho unique index nên read-path tự lo idempotency.</div>
+      </div>
+      <div class="card">
+        <div class="t amber">⑥ Ack chết im lặng sau một lần reset mạng</div>
+        <div class="l">ops-api subscribe topic ack <strong>một lần</strong>; một TCP reset của broker → vẫn publish được nhưng không nhận ack nữa → mọi lệnh sau đó rot thành <strong>TIMEOUT</strong> dù thiết bị đã ack.</div>
+        <div class="l green" style="margin-top:.4em">→ Subscribe trong <code>OnConnectionUp</code> (chạy lại mỗi lần reconnect). Chứng minh: restart broker → <code>set_fault</code> <strong>ACKED 0 ms</strong> xuyên reset. Có regression test.</div>
+      </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>07 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>06 / 14</span></div>
 </section>
 
 <!-- ============================ 8. INCIDENT ============================ -->
@@ -448,7 +458,40 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>08 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>07 / 14</span></div>
+</section>
+
+<!-- ============================ 10. RESOLUTION (NEW) ============================ -->
+<section class="slide">
+  <div class="eyebrow"><span class="dot"></span><span>08 · Cách khắc phục</span></div>
+  <h2>Ba con đường xử lý — một cửa audit duy nhất</h2>
+  <div class="slide-body">
+    <div class="cols c3">
+      <div class="card">
+        <div class="t green">A · TỰ ĐỘNG (restart)</div>
+        <div class="l">Class đã được duyệt + conf ≥ 0.85 + ETA ≤ 45' + breaker sạch</div>
+        <div class="l mono" style="margin-top:.3em;font-size:.85em">AUTO → compressor_restart<br>ACK 38 ms → hồi phục → tự resolve</div>
+      </div>
+      <div class="card">
+        <div class="t blue">B · ON-CALL (gọi người)</div>
+        <div class="l">Class chưa duyệt / lần đầu / cần sửa tại chỗ (đóng cửa, thay cảm biến)</div>
+        <div class="l mono" style="margin-top:.3em;font-size:.85em">HOLD → ack → dispatch technician<br>→ technician_dispatched → resolve</div>
+      </div>
+      <div class="card">
+        <div class="t amber">C · ESCALATE (ngắt quyền)</div>
+        <div class="l">≥2 thiết bị hỏng cùng lúc → nghi sự cố hệ thống, không phải 12 hành động độc lập</div>
+        <div class="l mono" style="margin-top:.3em;font-size:.85em">HOLD (giữ suốt episode)<br>→ người review từng thiết bị</div>
+      </div>
+    </div>
+    <div class="card hl" style="margin-top:.6em">
+      <div class="t">A′ · Khi chính AI thất bại — nó biết gọi người</div>
+      <div class="l">Thiết bị <strong>từ chối</strong> lệnh restart (<code>ok:false</code> — quá tải nhiệt latched). Agent không lặp vô hạn, không ngồi im:<br>
+      <span class="mono">restart #1 REFUSED → chờ 30s → retry #2 REFUSED → <strong class="amber">ESCALATED</strong> lên on-call</span><br>
+      Incident nhận <code>escalationNote</code> soạn sẵn (class, conf, ETA, lý do từ chối, hành động thủ công, case tương tự) + event <strong>critical</strong>; người chạy đúng lệnh <code>reboot</code> → hồi phục.</div>
+    </div>
+    <p class="note" style="margin-top:.5em">Đo live: phát hiện 132s (conf 0.968) → refused 3 ms → retry refused 6 ms → <strong>escalate 91s sau phát hiện</strong> → on-call reboot ACKED 38 ms → <code>system:recovery</code> 169s sau → fleet 12×OK.</p>
+  </div>
+  <div class="foot"><span>COLDTRACE</span><span>08 / 14</span></div>
 </section>
 
 <!-- ============================ 9. RESULTS ============================ -->
@@ -457,10 +500,10 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
   <h2>Con số đo trên hệ thống chạy thật</h2>
   <div class="slide-body">
     <div class="stats">
-      <div class="stat"><div class="v green">~60–100s</div><div class="n">phát hiện sự cố<br>fault → incident</div></div>
-      <div class="stat"><div class="v green">15s</div><div class="n">MTTR<br>lệnh → thiết bị OK</div></div>
-      <div class="stat"><div class="v green">~6 min</div><div class="n">incident → tự resolve</div></div>
-      <div class="stat"><div class="v green">~3 min</div><div class="n">Datadog Alert → OK<br>sau hồi phục</div></div>
+      <div class="stat"><div class="v green">148–255s</div><div class="n">phát hiện sự cố<br>fault → incident</div></div>
+      <div class="stat"><div class="v green">0–38 ms</div><div class="n">ACK lệnh sửa<br>lệnh → thiết bị nhận</div></div>
+      <div class="stat"><div class="v green">91–373s</div><div class="n">incident → tự resolve<br>sau khi sửa</div></div>
+      <div class="stat"><div class="v green">0.90–1.00</div><div class="n">confidence khi phát hiện<br>gate: 0.85</div></div>
       <div class="stat"><div class="v good">0/12</div><div class="n">false positive trên<br>fleet khỏe mạnh</div></div>
       <div class="stat"><div class="v blue">226×</div><div class="n">nén rollup hourly<br>(7.681× daily)</div></div>
     </div>
@@ -490,7 +533,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>09 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>09 / 14</span></div>
 </section>
 
 <!-- ============================ 10. REQUIREMENTS ============================ -->
@@ -510,7 +553,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div>
         <h3>Datadog</h3>
         <div class="checks" style="margin-top:.5em">
-          <div class="check"><div class="bx">✓</div><div><div class="ct">≥ 1 dashboard</div><div class="cd">11 widget · <code>v9y-45k-jsz</code></div></div></div>
+          <div class="check"><div class="bx">✓</div><div><div class="ct">≥ 1 dashboard</div><div class="cd">10 widget, tất cả có dữ liệu thật · <code>v9y-45k-jsz</code></div></div></div>
           <div class="check"><div class="bx">✓</div><div><div class="ct">≥ 1 monitor thực chất</div><div class="cd">3 monitors: ngưỡng ALARM · anomaly drift · fleet rollup</div></div></div>
           <div class="check"><div class="bx">✓</div><div><div class="ct">≥ 1 năng lực bổ sung <span class="muted">(có 4)</span></div><div class="cd">APM · Logs · Distributed Tracing · Anomaly Detection</div></div></div>
           <div class="check"><div class="bx">✓</div><div><div class="ct">Kết nối metrics · logs · traces</div><div class="cd">otel-collector duy nhất · trace_id correlate · deep-link UI → trace</div></div></div>
@@ -522,7 +565,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="l"><strong>Thư viện:</strong> mongo-driver v2, chi, paho, OTel SDK, Next.js, uPlot, Tailwind, mosquitto, otel-collector, Datadog Agent. <strong>Dataset ngoài:</strong> Không — toàn bộ từ simulator vật lý tự xây. <strong>AI:</strong> LLM gateway OneNexus (<code>dsv41f-thuytinh</code>) cho RCA/chat có fallback template; codebase viết với trợ giúp của agent lập trình.</div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>10 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>10 / 14</span></div>
 </section>
 
 <!-- ============================ 11. LIMITS ============================ -->
@@ -548,7 +591,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
     </div>
     <blockquote style="margin-top:.3em">Chúng tôi không giấu điểm yếu — mỗi hạn chế đều có lý do, và đường nâng cấp đã được dựng sẵn trong code.</blockquote>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>11 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>11 / 14</span></div>
 </section>
 
 <!-- ============================ 12. DEMO/TEAM ============================ -->
@@ -568,7 +611,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="card"><div class="t purple">Datadog</div><div class="l mono">app.ap1.datadoghq.com<br>dashboard v9y-45k-jsz</div></div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>12 / 13</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>12 / 14</span></div>
 </section>
 
 <!-- ============================ 13. CLOSE ============================ -->

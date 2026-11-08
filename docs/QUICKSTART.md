@@ -105,6 +105,25 @@ curl -s -X POST localhost:8092/api/demo/reset
 ./scripts/demo_cleanup.sh && ./scripts/demo_preflight.sh
 ```
 
+### The three resolution paths (what the AI does about it)
+
+| Path | When | What you see |
+|---|---|---|
+| **A — AUTO** | approved class, conf ≥ 0.85, ETA ≤ 45 min | `compressor_restart` → ACKED 0–38 ms → recovery → `system:recovery` |
+| **B — ON-CALL** | unapproved class / needs a person on site | `HOLD` → operator `ack` → dispatch technician → resolve |
+| **C — ESCALATE** | ≥ 2 devices alarming at once | `HOLD` latched for the episode — autonomy suspended |
+| **A′ — AGENT FAILS** | device refuses the restart | retry after 30 s → **escalated** with a pre-drafted `escalationNote` → human runs the prescribed `reboot` |
+
+```bash
+# Path A′ in one line: the failure that fights back
+curl -s -X POST localhost:8092/api/demo/inject -H 'Content-Type: application/json' \
+  -d '{"deviceId":"FZ-005","fault":"compressor_failure_hard"}'
+# …detect → AUTO → restart REFUSED → retry → REFUSED → ESCALATED (~90 s)…
+# then the human fix the note prescribes:
+curl -s -X POST localhost:8092/api/devices/FZ-005/commands \
+  -H 'Content-Type: application/json' -H 'X-Operator: on-call' -d '{"action":"reboot"}'
+```
+
 **The two rules that save every demo:**
 1. **Wait ~7 min after reset/restart before injecting** — the classifier needs
    a full 6-min window (72 samples @ 5 s). Evaluation is **skipped until the

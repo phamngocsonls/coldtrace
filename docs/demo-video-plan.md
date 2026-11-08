@@ -17,9 +17,17 @@ scene has a fallback so a single hiccup cannot sink the recording.
 > thermal pattern in **~3 minutes**, explains **why** (top factors + LLM
 > root-cause), remembers **similar incidents**, decides **within guardrails**
 > (approved class, confidence, ETA, fleet circuit breaker), remediates by
-> itself (**command → device ACK in ~12 ms**), then **auto-resolves** the
+> itself (**command → device ACK in 0–38 ms**), then **auto-resolves** the
 > incident when the cabinet is provably healthy again — and the whole chain
 > is one trace in Datadog.
+>
+> And when it **can't** fix it — no remote action, or the device refuses —
+> it says so and **pages a human**, pre-drafted. Three resolution paths
+> (auto / on-call / escalate), one audit trail.
+
+**The resolution arc is the spine of the video.** Every failure ends in one
+of three actions, and each is demonstrated: **A** auto-restart, **B** human
+dispatch, **C** breaker escalation, plus **A′** the agent failing safely.
 
 ---
 
@@ -80,9 +88,10 @@ State to confirm before recording:
 
 ## 3. Storyboard (scene by scene)
 
-Total runtime target: **10:00** (ten scenes). Real detection waits are hidden
+Total runtime target: **10:00** (eleven scenes). Real detection waits are hidden
 with **cuts** (see §5), so wall-clock recording stays ~40 min for the 10 min
-video.
+video. The spine is **resolution**: three action paths (AUTO / on-call /
+escalate) plus A′ (the agent failing safely), all shown.
 
 ### Scene 1 — The problem (0:00–0:40) *no live stack needed*
 
@@ -247,10 +256,26 @@ continuous chain:
   physics the fleet runs on — measured, not stored."*
 - **10 s:** Events page — the full audit trail you just created on camera.
 
-### Scene 10 — Outro (9:30–10:00)
+### Scene 10 — Resolution paths recap + the AI that knows when to stop (9:15–9:45) ⭐ trust
+
+Fast montage (30 s), three cards on screen — the three actions, one line each:
+
+| Path | Line |
+|---|---|
+| **A — AUTO** | *"Restarted itself in 38 ms — because you approved that class and the gates passed."* |
+| **B — ON-CALL** | *"Couldn't fix it? Paged a human with the fix already written: one ack, one dispatch."* |
+| **C — ESCALATE** | *"Two at once? It stopped, and asked a person to look at the fleet."* |
+
+Then the A′ beat, from the incident card (or Q&A ammo if you cut it):
+`escalationNote` visible — *"restart FAILED 2× — thermal overload latched —
+manual action: reboot"* → **Say:** *"The AI tried twice, then did what a good
+SRE does: stopped, paged a human, and wrote down everything they'd need.
+Escalation isn't the system failing — it's the system working."*
+
+### Scene 11 — Outro (9:45–10:00)
 
 - **Say:** *"Detect in minutes, explain itself, act inside guardrails, prove
-  recovery, close the audit trail. That's ColdTrace."* + repo/QR if wanted.
+  recovery, and know when to hand over. That's ColdTrace."* + repo/QR if wanted.
 
 ---
 
@@ -266,7 +291,7 @@ continuous chain:
 | 5 | **Root-cause** with an LLM grounded in real window stats (template fallback if the API is down) | Scene 4 |
 | 6 | **Remember**: cosine similarity over past incident vectors → "similar incidents" | Scene 4 |
 | 7 | **Decide within guardrails**: class approval, confidence, ETA, cooldown, fleet circuit breaker, kill switch | Scenes 5–6 |
-| 8 | **Act**: MQTT `compressor_restart` with a full command lifecycle (QUEUED→SENT→ACKED, ~12 ms) | Scene 5 |
+| 8 | **Act**: MQTT `compressor_restart` with a full command lifecycle (QUEUED→SENT→ACKED, 0–38 ms) | Scene 5 |
 | 9 | **Prove recovery**: 60 s healthy streak → auto-resolve `system:recovery` | Scene 5 ⭐ |
 | 10 | **Learn**: operator feedback → `Learn()` retrains, `trainSamples: 801` | Scene 5 kicker |
 | 11 | **Full-chain tracing**: one `traceId` broker → DB → decision → Datadog | Scene 7 |
