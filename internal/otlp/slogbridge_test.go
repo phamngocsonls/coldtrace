@@ -5,7 +5,10 @@ package otlp
 
 import (
 	"log/slog"
+	"math"
 	"testing"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func TestSeverityText(t *testing.T) {
@@ -46,5 +49,27 @@ func TestSlogAttrToKV(t *testing.T) {
 	dv := slogAttrToKV(slog.Duration("d", 1500000000))
 	if dv.Value.AsString() != "1.5s" {
 		t.Fatalf("duration attr = %+v", dv)
+	}
+}
+
+// A NaN float attribute must never become an OTLP double: the collector's
+// Datadog logs exporter json-marshals the record and drops the whole line
+// ("json: unsupported value: NaN"). The bridge renders the sentinel string —
+// verified against a live drop where every ai_decision log for a device with
+// no rising ETA disappeared from Log Explorer until this guard landed.
+func TestSlogAttrToKVGuardsNonFiniteFloats(t *testing.T) {
+	for _, v := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		kv := slogAttrToKV(slog.Float64("eta", v))
+		if got := kv.Value.Type(); got != attribute.STRING {
+			t.Fatalf("non-finite float %v became %v, want STRING", v, got)
+		}
+		if kv.Value.AsString() != "NaN" {
+			t.Fatalf("sentinel = %q, want \"NaN\"", kv.Value.AsString())
+		}
+	}
+	// finite floats still ride as doubles
+	kv := slogAttrToKV(slog.Float64("eta", 34.7))
+	if kv.Value.Type() != attribute.FLOAT64 || kv.Value.AsFloat64() != 34.7 {
+		t.Fatalf("finite float mangled: %+v", kv)
 	}
 }

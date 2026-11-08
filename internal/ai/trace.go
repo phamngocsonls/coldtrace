@@ -23,6 +23,17 @@ type DecisionSpanInput struct {
 	Result         PolicyResult
 }
 
+// etaAttr renders the ETA for span attributes. NaN (no rising path — e.g.
+// sensor_drift) must never ride as a float attribute: the downstream Datadog
+// exporter serializes attributes through JSON and drops the whole record on
+// "json: unsupported value: NaN". Render it as the string "n/a" instead.
+func etaAttr(eta float64) attribute.KeyValue {
+	if eta != eta { // NaN check without importing math here
+		return attribute.String("ai.eta_alarm_min", "n/a")
+	}
+	return attribute.Float64("ai.eta_alarm_min", eta)
+}
+
 // DecisionSpan emits the "ai.decision" span and returns its trace ID
 // (hex, 32 chars) so the incident record can deep-link into Datadog.
 // A nil tracer is a safe no-op — tracing stays optional wiring, never a
@@ -37,7 +48,7 @@ func DecisionSpan(ctx context.Context, tracer trace.Tracer, in DecisionSpanInput
 		attribute.String("ai.decision", in.Classification),
 		attribute.String("ai.reason", in.Result.Reason),
 		attribute.Float64("ai.confidence", in.Confidence),
-		attribute.Float64("ai.eta_alarm_min", in.EtaAlarmMin),
+		etaAttr(in.EtaAlarmMin),
 		attribute.Int("ai.alarming_now", in.AlarmingNow),
 		attribute.Int("ai.similar_count", in.SimilarCount),
 		attribute.Bool("ai.conf_gate", in.Result.ConfGate),

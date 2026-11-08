@@ -7,6 +7,7 @@ package otlp
 import (
 	"context"
 	"log/slog"
+	"math"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log"
@@ -79,7 +80,17 @@ func slogAttrToKV(a slog.Attr) attribute.KeyValue {
 	case slog.KindBool:
 		return attribute.Bool(a.Key, a.Value.Bool())
 	case slog.KindFloat64:
-		return attribute.Float64(a.Key, a.Value.Float64())
+		f := a.Value.Float64()
+		// NaN/Inf must not ride as OTLP doubles: the collector's Datadog
+		// logs exporter json-marshals each record and DROPS the whole line
+		// on "json: unsupported value: NaN" (observed live: every
+		// ai_decision log for a device with no rising ETA vanished from
+		// Log Explorer). Render the sentinel string instead — a weird
+		// value beats a missing log.
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return attribute.String(a.Key, "NaN")
+		}
+		return attribute.Float64(a.Key, f)
 	case slog.KindDuration:
 		return attribute.String(a.Key, a.Value.Duration().String())
 	case slog.KindTime:

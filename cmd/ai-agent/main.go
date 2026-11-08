@@ -669,7 +669,7 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 		}
 		a.log.Info("ai_decision_refreshed",
 			"deviceId", deviceID, "class", class, "confidence", round3(conf),
-			"etaAlarmMin", round3(eta), "decision", decision, "reason", reason)
+			etaLogAttr(eta), "decision", decision, "reason", reason)
 		return
 	} else if !errors.Is(errRefresh, mongo.ErrNoDocuments) {
 		a.log.Error("incident lookup failed", "err", errRefresh)
@@ -710,7 +710,7 @@ func (a *agent) evaluate(ctx context.Context, deviceID string, samples []ai.Samp
 	}
 	a.log.Info("ai_decision",
 		"incidentId", ins.InsertedID, "deviceId", deviceID,
-		"class", class, "confidence", round3(conf), "etaAlarmMin", round3(eta),
+		"class", class, "confidence", round3(conf), etaLogAttr(eta),
 		"decision", string(res.Decision), "reason", res.Reason,
 		"similarCount", len(similar))
 
@@ -970,3 +970,15 @@ func (a *agent) feedback(w http.ResponseWriter, r *http.Request) {
 }
 
 func round3(v float64) float64 { return math.Round(v*1000) / 1000 }
+
+// etaLogAttr renders the ETA for slog fields. NaN (no rising path — e.g.
+// sensor_drift) must never ride as a float: the slog→OTel bridge forwards
+// it to the collector, and the Datadog logs exporter serializes records
+// through JSON and DROPS the whole line ("json: unsupported value: NaN") —
+// exactly the AI decision logs the demo shows in Log Explorer.
+func etaLogAttr(eta float64) slog.Attr {
+	if math.IsNaN(eta) {
+		return slog.String("etaAlarmMin", "n/a")
+	}
+	return slog.Float64("etaAlarmMin", round3(eta))
+}
