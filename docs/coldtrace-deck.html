@@ -266,7 +266,49 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="l">Tín hiệu phát hiện sớm <strong>đã có sẵn</strong> trong dữ liệu cảm biến. Vấn đề không phải thiếu dữ liệu, cũng không phải thiếu công cụ — mà là <em>không thể cắt cử người trực từng giây cho hàng chục dàn lạnh</em>. ColdTrace đảm nhận phần trực đó: đọc tín hiệu, quyết định và xử lý — kể cả lúc nửa đêm.</div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>01 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>01 / 15</span></div>
+</section>
+
+<!-- ============================ 2b. HACCP EXPLAINER ============================ -->
+<section class="slide">
+  <div class="eyebrow"><span class="dot"></span><span>02b · Giải thích thuật ngữ</span></div>
+  <h2>HACCP là gì — và vì sao người ta vẫn phải chép tay?</h2>
+  <div class="slide-body">
+    <div class="card hl" style="margin-bottom:.5em">
+      <div class="t">HACCP = Hazard Analysis and Critical Control Points</div>
+      <div class="l">Hệ thống quản lý an toàn thực phẩm <strong>bắt buộc theo luật</strong> (FDA, EU 852/2004, Nghị định 15/2018). Không phải chứng chỉ trang trí — đây là cách <strong>chứng minh bằng giấy tờ</strong> rằng bạn kiểm soát được nguy cơ làm hỏng thực phẩm.</div>
+    </div>
+    <div class="cols c2">
+      <div>
+        <h3>5 khái niệm cốt lõi</h3>
+        <table style="margin-top:.5em">
+          <tr><td class="mono green">CCP</td><td><strong>Điểm kiểm soát tới hạn</strong> — bước mà nếu sai thì thực phẩm không an toàn <em class="muted">(ở đây: nhiệt độ tủ đông)</em></td></tr>
+          <tr><td class="mono green">Critical Limit</td><td><strong>Giới hạn tới hạn</strong> — ngưỡng không được vượt <em class="muted">(−14 °C cảnh báo, −10 °C hư hỏng)</em></td></tr>
+          <tr><td class="mono green">Monitoring</td><td><strong>Giám sát</strong> — đo và ghi lại đều đặn <em class="muted">(cảm biến mỗi 5 giây)</em></td></tr>
+          <tr><td class="mono green">Corrective Action</td><td><strong>Hành động khắc phục</strong> — làm gì khi vượt ngưỡng</td></tr>
+          <tr><td class="mono green">Records</td><td><strong>Hồ sơ</strong> — bằng chứng lưu trữ để thanh tra xem</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Vì sao "phải chép tay"?</h3>
+        <div class="card" style="margin-top:.5em;border-color:rgba(255,90,90,.3)">
+          <div class="t red">Quy trình sổ giấy hiện tại</div>
+          <div class="l mono" style="font-size:.88em;line-height:1.9">
+            Cứ 2 giờ, nhân viên trực ca:<br>
+            &nbsp;→ cầm nhiệt kế đi từng tủ<br>
+            &nbsp;→ đọc số, ghi tay vào sổ<br>
+            &nbsp;→ ký tên, ghi giờ
+          </div>
+        </div>
+        <ul class="clean p" style="margin-top:.7em;font-size:.92em">
+          <li><strong>Không liên tục</strong> — sự cố xảy ra giữa 2 lần đo thì <em>không ai biết</em></li>
+          <li><strong>Có thể bị sửa</strong> — ghi bù, sửa số → thanh tra mất niềm tin</li>
+          <li><strong>Không chứng minh được</strong> — "ai sửa, sửa lúc mấy giờ?" không có bằng chứng</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>COLDTRACE</span><span>02 / 15</span></div>
 </section>
 
 <!-- ============================ 3. SOLUTION ============================ -->
@@ -291,7 +333,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>02 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>03 / 15</span></div>
 </section>
 
 <!-- ============================ 4. ARCHITECTURE ============================ -->
@@ -312,7 +354,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <span class="muted">vẽ bằng Archify</span>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>03 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>04 / 15</span></div>
 </section>
 
 <!-- ============================ 5. MONGODB ============================ -->
@@ -350,7 +392,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>04 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>05 / 15</span></div>
 </section>
 
 <!-- ============================ 6. DATADOG ============================ -->
@@ -382,7 +424,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>05 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>06 / 15</span></div>
 </section>
 
 <!-- ============================ 7. DIFFERENTIATOR ============================ -->
@@ -423,7 +465,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>06 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>07 / 15</span></div>
 </section>
 
 <!-- ============================ 8. INCIDENT ============================ -->
@@ -458,7 +500,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>07 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>08 / 15</span></div>
 </section>
 
 <!-- ============================ 10. RESOLUTION (NEW) ============================ -->
@@ -491,7 +533,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
     </div>
     <p class="note" style="margin-top:.5em">Đo live: phát hiện 132s (conf 0.968) → refused 3 ms → retry refused 6 ms → <strong>escalate 91s sau phát hiện</strong> → on-call reboot ACKED 38 ms → <code>system:recovery</code> 169s sau → fleet 12×OK.</p>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>08 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>09 / 15</span></div>
 </section>
 
 <!-- ============================ 9. RESULTS ============================ -->
@@ -533,7 +575,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       </div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>09 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>10 / 15</span></div>
 </section>
 
 <!-- ============================ 10. REQUIREMENTS ============================ -->
@@ -560,12 +602,25 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
         </div>
       </div>
     </div>
+    <div class="card" style="margin-top:.7em">
+      <div class="t">Luật HACCP đòi gì — ColdTrace có gì</div>
+      <div class="table" style="margin-top:.4em">
+        <table>
+          <tr><th>Yêu cầu HACCP</th><th>ColdTrace</th><th>Bằng chứng trên hình</th></tr>
+          <tr><td>Monitoring liên tục</td><td>Cảm biến 5 giây/lần</td><td class="mono">telemetry</td></tr>
+          <tr><td>Critical limit rõ ràng</td><td>−14 °C cảnh báo · −10 °C hư hỏng</td><td>thang trạng thái + monitor</td></tr>
+          <tr><td>Corrective action có ghi lại</td><td>commands + events audit</td><td class="mono">compressor_restart</td></tr>
+          <tr><td>Hồ sơ xuất được</td><td class="green">CSV excursion, giờ ICT</td><td class="mono">19.1 min trên −14 °C</td></tr>
+          <tr><td>Không sửa được sau khi ghi</td><td>audit trail append-only</td><td class="mono">traceId</td></tr>
+        </table>
+      </div>
+    </div>
     <div class="card" style="margin-top:.9em">
       <div class="t">Khai báo tái sử dụng · dataset · AI</div>
       <div class="l"><strong>Thư viện:</strong> mongo-driver v2, chi, paho, OTel SDK, Next.js, uPlot, Tailwind, mosquitto, otel-collector, Datadog Agent. <strong>Dataset ngoài:</strong> Không — toàn bộ từ simulator vật lý tự xây. <strong>AI:</strong> LLM gateway OneNexus (<code>dsv41f-thuytinh</code>) cho RCA/chat có fallback template; codebase viết với trợ giúp của agent lập trình.</div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>10 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>11 / 15</span></div>
 </section>
 
 <!-- ============================ 11. LIMITS ============================ -->
@@ -591,7 +646,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
     </div>
     <blockquote style="margin-top:.3em">Chúng tôi không giấu điểm yếu — mỗi hạn chế đều có lý do, và đường nâng cấp đã được dựng sẵn trong code.</blockquote>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>11 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>12 / 15</span></div>
 </section>
 
 <!-- ============================ 12. DEMO/TEAM ============================ -->
@@ -611,7 +666,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
       <div class="card"><div class="t purple">Datadog</div><div class="l mono">app.ap1.datadoghq.com<br>dashboard v9y-45k-jsz</div></div>
     </div>
   </div>
-  <div class="foot"><span>COLDTRACE</span><span>12 / 14</span></div>
+  <div class="foot"><span>COLDTRACE</span><span>13 / 15</span></div>
 </section>
 
 <!-- ============================ 13. CLOSE ============================ -->
@@ -630,7 +685,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
 
 <div id="hud">
   <button id="prev" aria-label="Slide trước">←</button>
-  <span id="count">1 / 14</span>
+  <span id="count">1 / 15</span>
   <button id="next" aria-label="Slide sau">→</button>
   <button id="full" title="Toàn màn hình">⛶</button>
   <button id="print" title="In / Export PDF">⤓ PDF</button>
