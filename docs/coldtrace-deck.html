@@ -417,7 +417,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
         </div>
         <div class="card hp" style="margin-top:.85em">
           <div class="t">Điểm kỹ thuật</div>
-          <div class="l">Agent tự chạy pipeline aggregation trên MongoDB → gauge <code>fleet.device_count{status}</code> <strong>zero-fill cả 3 trạng thái</strong>. Thiếu zero-fill thì monitor không bao giờ tự clear: series im lặng, Datadog giữ giá trị cuối mãi mãi.</div>
+          <div class="l">Mỗi lần chạy, agent báo Datadog <strong>đủ cả 3 con số</strong> — kể cả khi con số đó là <code>0</code>. Không làm vậy thì khi cả fleet khỏe, tín hiệu cảnh báo <em>ngừng được gửi đi</em>, và Datadog cứ tưởng nó vẫn là <code>1</code> — nên monitor <strong>kẹt ở trạng thái Alert vĩnh viễn</strong>.</div>
         </div>
       </div>
     </div>
