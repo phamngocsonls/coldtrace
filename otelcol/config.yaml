@@ -1,0 +1,81 @@
+# ColdTrace OpenTelemetry Collector — the single telemetry switchboard.
+#
+# Apps export OTLP here (docker-compose default OTEL_EXPORTER_OTLP_ENDPOINT
+# = otel-collector:4318); this collector ships traces, metrics AND logs to
+# Datadog through the native exporter, plus APM stats via the connector.
+#
+# Datadog is the only backend: no vendor SDK in the apps, so the OTel
+# pipeline stays portable.
+#
+# Validate:
+#   docker run --rm -e DD_API_KEY=x \
+#     -v "$PWD/otelcol/config.yaml:/etc/otelcol/config.yaml:ro" \
+#     ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.164.0 \
+#     validate --config=/etc/otelcol/config.yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 256
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 2s
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: hackathon
+        action: upsert
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+connectors:
+  # APM stats from unsampled traces — REQUIRED for Datadog APM views.
+  # /connector suffix avoids the exporter/connector ID ambiguity.
+  datadog/connector/connector:
+    traces:
+      compute_stats_by_span_kind: true
+      peer_tags_aggregation: true
+
+exporters:
+  datadog/exporter:
+    api:
+      key: ${env:DD_API_KEY}
+      site: ${env:DD_SITE:-datadoghq.com}
+    host_metadata:
+      enabled: false
+
+service:
+  telemetry:
+    logs:
+      level: info
+  ## Readiness endpoint on :13133, used by the compose healthcheck.
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [datadog/connector/connector, datadog/exporter]
+    traces/dd: # APM stats derived from the full trace stream
+      receivers: [datadog/connector/connector]
+      processors: [batch]
+      exporters: [datadog/exporter]
+    metrics:
+      receivers: [otlp, datadog/connector/connector]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [datadog/exporter]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [datadog/exporter]

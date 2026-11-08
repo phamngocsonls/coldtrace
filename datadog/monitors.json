@@ -1,0 +1,58 @@
+{
+  "monitors": [
+    {
+      "name": "[ColdTrace] FZ-003 temperature above ALARM threshold",
+      "type": "query alert",
+      "query": "avg(last_5m):avg:coldchain.device.temp{device:FZ-003} > -10",
+      "message": "Freezer FZ-003 cabinet temperature is {{value}}\u00b0C (threshold -10\u00b0C). Compressor failure suspected. Runbook: coldtrace/scripts/demo_runbook.md \u2014 investigate logs (service:coldtrace-simulator device:FZ-003), remediate via POST /devices/FZ-003/remediate.",
+      "tags": [
+        "team:sre",
+        "fleet:coldchain",
+        "severity:critical"
+      ],
+      "options": {
+        "thresholds": {
+          "critical": -10,
+          "warning": -14
+        },
+        "notify_no_data": false,
+        "renotify_interval": 10
+      }
+    },
+    {
+      "name": "[ColdTrace] Temperature anomaly (drift) on any device",
+      "type": "query alert",
+      "query": "avg(last_15m):anomalies(avg:coldchain.device.temp{*} by {device}, 'basic', 3, direction='above', alert_window='last_15m', interval=60, count_default_zero='true') >= 1",
+      "message": "Anomalous temperature drift detected on {{device.name}} (anomaly detection, before hard threshold). Likely compressor degradation. Investigate: dashboard ColdTrace \u2014 Fleet Health, log facet device:{{device.name}}.",
+      "tags": [
+        "team:sre",
+        "fleet:coldchain",
+        "severity:warning"
+      ],
+      "options": {
+        "threshold_windows": {
+          "trigger_window": "last_15m",
+          "recovery_window": "last_15m"
+        },
+        "notify_no_data": false
+      }
+    },
+    {
+      "name": "[ColdTrace] Fleet AT_RISK+ALARM count > 0 (Atlas rollup)",
+      "type": "query alert",
+      "query": "max(last_10m):sum:mongodb.coldchain.fleet.device_count{status:at_risk} + sum:mongodb.coldchain.fleet.device_count{status:alarm} >= 1",
+      "message": "MongoDB aggregation pipeline reports {{value}} device(s) at-risk or in alarm (window-function slope analysis in Atlas). Cross-check the ColdTrace dashboard and logs before dispatching remediation.",
+      "tags": [
+        "team:sre",
+        "fleet:coldchain",
+        "severity:critical"
+      ],
+      "options": {
+        "thresholds": {
+          "critical": 1
+        },
+        "notify_no_data": false
+      }
+    }
+  ]
+}

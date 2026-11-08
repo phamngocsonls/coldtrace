@@ -1,0 +1,149 @@
+## Datadog Agent — MongoDB integration for ColdTrace.
+## The fleet-rollup aggregate mirrors internal/aggdb.fleetRollupPipeline: a
+## 5-minute endpoint-differenced slope against the same +0.10 C/min AT_RISK
+## threshold and the same temp bands. It submits tagged gauges:
+##   mongodb.coldchain.fleet.device_count{status:ok|at_risk|alarm}
+## Every status is ALWAYS emitted, zero-filled — see the $project stage near
+## the end for why that matters for monitor resolution.
+##
+## Shape notes (verified against agent 7.83.3 + the official guide):
+##   - `query` must be the runCommand object as a YAML MAPPING, not a JSON
+##     string: the InstanceConfig model rejects strings outright
+##     ("Input should be an instance of mappingproxy").
+##   - Date filters use the documented helper syntax
+##     `new Date(ISODate().getTime() - <ms>)` — there is no `$$now`/`$$dateToJs`
+##     server-side or agent-side variable for custom queries.
+##   - `status` is $toLower-ed: the dashboard + monitors query
+##     {status:at_risk}/{status:alarm} and tag values keep the case produced
+##     here (the app's own status strings are uppercase).
+##
+## AUTH: local demo mongo runs with auth OFF — omit username/password here.
+## For Atlas: set username/password, options.authSource: admin and tls: true,
+## and point hosts at the cluster (the ${MONGO_*} values below come from
+## docker-compose env when that substitution is available; literal values
+## are used otherwise).
+init_config:
+  timeout: 10000
+
+instances:
+  - hosts:
+      - mongodb:27017
+    ## Atlas-only (uncomment + set real values):
+    ## username: <MONGO_USER>
+    ## password: <MONGO_PASSWORD>
+    ## options:
+    ##   authSource: admin
+    ##   tls: true
+    tags:
+      - env:hackathon
+      - fleet:coldchain
+
+    custom_queries:
+      - metric_prefix: mongodb.coldchain.fleet
+        query:
+          aggregate: telemetry
+          pipeline:
+            - $match:
+                ts:
+                  $gte: "new Date(ISODate().getTime() - 900000)"   # last 15 min
+            ## Slope as (last - first) over the 5-minute window, NOT
+            ## $derivative. $derivative differences each raw sample, so it
+            ## amplifies sensor noise: on a healthy cabinet every tick can
+            ## differ by +/-0.05 C, and adjacent samples a few seconds apart
+            ## then read up to +0.9 C/min. Measured on the live fleet, ~20%
+            ## of healthy samples crossed the +0.10 AT_RISK line that way.
+            ## Endpoint differencing over the whole window integrates the
+            ## noise out — and matches what the Go pipeline reports.
+            - $group:
+                _id: "$meta.deviceId"
+                firstTemp:
+                  $first: "$tempC"
+                firstTs:
+                  $first: "$ts"
+                lastTemp:
+                  $last: "$tempC"
+                lastTs:
+                  $last: "$ts"
+                tempAvg5m:
+                  $avg: "$tempC"
+            - $addFields:
+                lastSlope:
+                  $cond:
+                    - $gt:
+                        - $subtract: ["$lastTs", "$firstTs"]
+                        - 0
+                    - $divide:
+                        - $multiply:
+                            - $subtract: ["$lastTemp", "$firstTemp"]
+                            - 60
+                        - $divide:
+                            - $subtract: ["$lastTs", "$firstTs"]
+                            - 1000
+                    - 0
+            - $addFields:
+                status:
+                  $toLower:
+                    $switch:
+                      branches:
+                        - case:
+                            $gt: ["$lastTemp", -10]
+                          then: ALARM
+                        - case:
+                            $or:
+                              - $gt: ["$lastTemp", -14]
+                              - $gt:
+                                  - $ifNull: ["$lastSlope", 0]
+                                  - 0.10
+                          then: AT_RISK
+                      default: OK
+            - $group:
+                _id: "$status"
+                count:
+                  $sum: 1
+            ## Always emit ALL THREE statuses, zero-filled. A conditional
+            ## pipeline that only returns present statuses stops emitting
+            ## status:at_risk the moment the fleet is healthy — Datadog then
+            ## holds the last sample (1) forever and the fleet monitor never
+            ## resolves. Writing 0 keeps every series live so a monitor's
+            ## window rolls off cleanly.
+            - $group:
+                _id: null
+                present:
+                  $push:
+                    _id: "$_id"
+                    count: "$count"
+            - $project:
+                rows:
+                  $map:
+                    input: [ok, at_risk, alarm]
+                    as: s
+                    in:
+                      _id: "$$s"
+                      count:
+                        $ifNull:
+                          - $getField:
+                              field: count
+                              input:
+                                $first:
+                                  $filter:
+                                    input: "$present"
+                                    as: p
+                                    cond:
+                                      $eq: ["$$p._id", "$$s"]
+                          - 0
+            - $unwind: "$rows"
+            - $replaceWith: "$rows"
+          cursor: {}
+        database: coldtrace
+        fields:
+          ## the aggregate groups by status into _id — read THAT as the tag
+          ## (field_name: status would silently emit no tag: the rows carry
+          ## the value under _id, per the runCommand shape in the docs).
+          - field_name: _id
+            name: status
+            type: tag
+          - field_name: count
+            name: device_count
+            type: gauge
+        tags:
+          - fleet:coldchain

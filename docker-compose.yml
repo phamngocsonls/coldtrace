@@ -1,0 +1,212 @@
+services:
+  mongodb:
+    image: mongo:8.3.13-noble
+    # --replSet (single-node) enables change streams — the SSE bus for the
+    # ops console watches device_state / events / ai_incidents. Standalone
+    # MongoDB rejects $changeStream (Location40573). Single-node demo RS:
+    # no keyFile (auth off) — acceptable for a local-only demo stack.
+    command: ["--bind_ip_all", "--replSet", "rs0"]
+    ports: ["27017:27017"]
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok' | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  broker:
+    image: eclipse-mosquitto:2.1.2-alpine
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+    ports: ["1883:1883"]
+    volumes:
+      - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -t health -m ok || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Fleet simulator: one process, 12 devices (FZ-001..FZ-012) sharing a single
+  # MQTT connection. Acks go to coldchain/{id}/acks for the command lifecycle.
+  fleet-simulator:
+    restart: unless-stopped
+    build: { context: ., dockerfile: simulator/Dockerfile }
+    depends_on:
+      broker: { condition: service_healthy }
+    command: ["--devices", "FZ-001..FZ-012", "--broker", "mqtt://broker:1883", "--interval", "${SIM_INTERVAL_SECONDS:-5}"]
+
+  # --- Load generator (activate with `--profile loadgen`) ---
+  # ONE process drives 10 high-rate devices (LG-101..LG-110) at 1s cadence —
+  # same fleet-simulator image, `--devices` range spec. ~20 extra spans/s.
+  loadgen:
+    build: { context: ., dockerfile: simulator/Dockerfile }
+    profiles: ["loadgen"]
+    depends_on:
+      broker: { condition: service_healthy }
+    command: ["--devices", "LG-101..LG-110", "--broker", "mqtt://broker:1883", "--interval", "${LOADGEN_INTERVAL:-1}"]
+
+  gateway:
+    restart: unless-stopped
+    build: { context: ., dockerfile: gateway/Dockerfile }
+    depends_on:
+      broker: { condition: service_healthy }
+      mongodb: { condition: service_healthy }
+    environment:
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - MONGO_DB=${MONGO_DB:-coldtrace}
+      - MQTT_BROKER=mqtt://broker:1883
+      - GATEWAY_PORT=8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}
+      - SERVICE_VERSION=${SERVICE_VERSION:-1.0.0}
+    ports: ["${GATEWAY_PORT:-8099}:8080"]
+
+  ai-agent:
+    restart: unless-stopped
+    build: { context: ., dockerfile: ai-agent/Dockerfile }
+    depends_on:
+      mongodb: { condition: service_healthy }
+      broker: { condition: service_healthy }
+    environment:
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - MONGO_DB=${MONGO_DB:-coldtrace}
+      - MQTT_BROKER=mqtt://broker:1883
+      - AI_PORT=8091
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}
+      - SERVICE_VERSION=${SERVICE_VERSION:-1.0.0}
+      # LLM root-cause analysis. Two providers; the Anthropic key wins when set:
+      #   Anthropic Messages API | OpenAI-compatible (api.openai.com or a gateway)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+    ports: ["8091:8091"]
+
+  # --- Datadog: the only observability backend ---
+  # Infra plane: container logs, host metrics, DogStatsD, legacy APM receiver.
+  # OTLP traces/metrics/logs flow via otel-collector (otelcol/config.yaml) with
+  # the native datadog exporter — no OTLP intake needed on the agent.
+  # NOTE: image is the Docker Hub public one; gcr.io/datadog-agent/* requires
+  # authentication and is NOT a public mirror (pull fails with
+  # "Unauthenticated request" — caught during local verification).
+  datadog-agent:
+    image: datadog/agent:7.83.3
+    pid: host
+    depends_on:
+      mongodb: { condition: service_healthy }
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=${DD_SITE:-datadoghq.com}
+      - DD_ENV=hackathon
+      - DD_SERVICE=coldtrace-gateway
+      - DD_VERSION=${SERVICE_VERSION:-1.0.0}
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_CONTAINER_EXCLUDE=name:datadog-agent
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_AUTOCONFIG_FROM_ENVIRONMENT=true
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_DB=${MONGO_DB:-coldtrace}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - ./datadog/agent/conf.d:/etc/datadog-agent/conf.d:ro
+    ports:
+      - "8125:8125/udp"   # DogStatsD (legacy)
+      - "8126:8126"       # APM trace receiver (legacy)
+
+  # --- OpenTelemetry Collector: the telemetry switchboard ---
+  # Apps ship OTLP here; it exports traces, metrics and logs to Datadog with
+  # the native datadog exporter. No app ever talks to a vendor SDK.
+  otel-collector:
+    restart: unless-stopped
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.164.0
+    depends_on:
+      mongodb: { condition: service_healthy }
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      - DD_API_KEY=${DD_API_KEY:-}
+      - DD_SITE=${DD_SITE:-datadoghq.com}
+    volumes:
+      - ./otelcol/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "13133:13133"   # health_check extension — real readiness, probeable from the host
+    # No healthcheck. This image is distroless (no shell, no curl/wget) and
+    # otelcol-contrib 0.164 has no `health` subcommand, so nothing inside the
+    # container can probe :13133. The previous `validate` check started the
+    # collector and never exited — it could only time out, reporting the
+    # container "unhealthy" while it shipped data fine. Liveness here is the
+    # readiness log line "Everything is ready" plus data arriving downstream;
+    # scripts/demo_preflight.sh asserts freshness end-to-end instead.
+
+  # --- Downsampling service (hot -> warm) ---
+  # Collapses raw readings into hourly + daily summaries with $group/$merge,
+  # bucketed in Asia/Ho_Chi_Minh. Raw telemetry keeps its 24h TTL; summaries
+  # last 7d (hourly) and 365d (daily) — the workshop's hot/warm/cold model.
+  rollup:
+    restart: unless-stopped
+    build: { context: ., dockerfile: rollup/Dockerfile }
+    depends_on:
+      mongodb: { condition: service_healthy }
+    environment:
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - MONGO_DB=${MONGO_DB:-coldtrace}
+      - ROLLUP_TZ=${ROLLUP_TZ:-Asia/Ho_Chi_Minh}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}
+      - SERVICE_VERSION=${SERVICE_VERSION:-1.0.0}
+    command: ["-interval", "${ROLLUP_INTERVAL:-5m}"]
+
+  # --- Ops control plane (REST + SSE + commands + AI agent chat) ---
+  ops-api:
+    restart: unless-stopped
+    build: { context: ., dockerfile: ops-api/Dockerfile }
+    depends_on:
+      mongodb: { condition: service_healthy }
+      broker: { condition: service_healthy }
+    environment:
+      # not hardcoded: honors MONGO_URI from .env (Atlas-ready)
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - MONGO_DB=${MONGO_DB:-coldtrace}
+      - MQTT_BROKER=mqtt://broker:1883
+      - OPS_PORT=8092
+      - OPS_TOKEN=${OPS_TOKEN:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}
+      - SERVICE_VERSION=${SERVICE_VERSION:-1.0.0}
+      # AI copilot/RCA engines, highest priority first:
+      #   Cursor Cloud Agents | Anthropic Messages API | OpenAI-compatible
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      # Cursor Cloud Agents engine (wins over both chat engines when set)
+      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
+      - CURSOR_API_URL=${CURSOR_API_URL:-}
+      - CURSOR_MODEL=${CURSOR_MODEL:-}
+      - CURSOR_REPO=${CURSOR_REPO:-}
+    ports: ["8092:8092"]
+
+  # --- Ops Console (Next.js on Bun) ---
+  ops-console:
+    restart: unless-stopped
+    build: { context: ./ops-console, dockerfile: Dockerfile }
+    depends_on:
+      - ops-api
+    environment:
+      - NEXT_PUBLIC_OPS_API=http://localhost:8092
+      # Datadog web app region, used to build trace deep links (app.<site>).
+      - NEXT_PUBLIC_DD_SITE=${DD_SITE:-ap1.datadoghq.com}
+      - PORT=3301
+      - HOSTNAME=0.0.0.0
+    ports: ["3301:3301"]
+
+volumes:
+  mongodb_data:

@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/*
+ * ColdTrace Ops Console — dense dark ops theme (ui-ux-pro-max design system)
+ * bg #0F172A · card #1B2336 · accent #22C55E · destructive #EF4444
+ * Status always pairs color with label + icon (never color alone).
+ */
+:root {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1b2336;
+  --card-foreground: #f8fafc;
+  --muted: #272f42;
+  --muted-foreground: #94a3b8;
+  --border: #475569;
+  --accent: #22c55e;
+  --on-accent: #0f172a;
+  --destructive: #ef4444;
+  --warning: #f59e0b;
+  --info: #38bdf8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --font-sans: var(--font-fira-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-fira-code), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+/* glass/blur reserved for overlays (drawer, AI agent panel) */
+.glass {
+  backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  border: 1px solid color-mix(in srgb, white 12%, transparent);
+}
+
+/* focus rings: visible for keyboard nav */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* reduced motion: kill transitions */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

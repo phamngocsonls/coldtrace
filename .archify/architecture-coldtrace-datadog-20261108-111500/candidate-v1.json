@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ColdTrace — Kiến trúc & luồng dữ liệu",
+    "subtitle": "Vòng lặp khép kín: thu thập → phát hiện → xử lý → hồi phục, quan sát qua Datadog",
+    "output": "docs/coldtrace-architecture.html",
+    "locale": "vi",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "freezers", "type": "external", "label": "12 dàn lạnh", "sublabel": "simulator · 5s/tick", "pos": [20, 150], "size": [140, 74] },
+    { "id": "mqtt", "type": "messagebus", "label": "mosquitto", "sublabel": "MQTT broker", "pos": [270, 150], "size": [110, 74] },
+    { "id": "gateway", "type": "backend", "label": "gateway :8099", "sublabel": "W3C tracecontext", "pos": [460, 150], "size": [160, 74] },
+    { "id": "mongo", "type": "database", "label": "MongoDB 8.3 · rs0", "sublabel": "time series · TTL 24h", "pos": [700, 150], "size": [170, 74] },
+    { "id": "console", "type": "frontend", "label": "Ops Console :3301", "sublabel": "Next.js · uPlot", "pos": [940, 150], "size": [150, 74] },
+    { "id": "rollup", "type": "backend", "label": "rollup worker", "sublabel": "$group → $merge", "pos": [80, 330], "size": [150, 74] },
+    { "id": "ai", "type": "backend", "label": "ai-agent :8091", "sublabel": "classify · policy gate", "pos": [700, 330], "size": [170, 74] },
+    { "id": "opsapi", "type": "backend", "label": "ops-api :8092", "sublabel": "REST · SSE", "pos": [940, 330], "size": [150, 74] },
+    { "id": "otel", "type": "backend", "label": "otel-collector", "sublabel": "OTLP · exporter", "pos": [460, 520], "size": [140, 74] },
+    { "id": "ddagent", "type": "database", "label": "datadog-agent", "sublabel": "custom query MongoDB", "pos": [920, 520], "size": [170, 74] },
+    { "id": "datadog", "type": "cloud", "label": "Datadog ap1", "sublabel": "APM · logs · monitors", "pos": [700, 700], "size": [170, 74] }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Docker Compose · một máy local",
+      "wraps": ["mqtt", "gateway", "mongo", "console", "ai", "rollup", "opsapi", "otel", "ddagent"]
+    }
+  ],
+  "connections": [
+    { "id": "telemetry-in", "from": "freezers", "to": "mqtt", "label": "MQTT 5s", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "sub", "from": "mqtt", "to": "gateway", "label": "subscribe", "fromSide": "right", "toSide": "left" },
+    { "id": "write", "from": "gateway", "to": "mongo", "label": "batch write", "fromSide": "right", "toSide": "left" },
+    { "id": "sse", "from": "mongo", "to": "console", "label": "SSE", "fromSide": "right", "toSide": "left" },
+    { "id": "read-api", "from": "mongo", "to": "opsapi", "label": "aggregate", "fromSide": "right", "toSide": "top" },
+    { "id": "rest", "from": "opsapi", "to": "console", "label": "REST", "fromSide": "top", "toSide": "bottom" },
+    { "id": "evaluate", "from": "mongo", "to": "ai", "label": "window", "fromSide": "bottom", "toSide": "top" },
+    { "id": "stream", "from": "ai", "to": "rollup", "label": "rollup", "fromSide": "left", "toSide": "right" },
+    { "id": "restart", "from": "ai", "to": "freezers", "label": "compressor_restart", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "id": "otlp", "from": "gateway", "to": "otel", "label": "OTLP", "fromSide": "bottom", "toSide": "top" },
+    { "id": "ship", "from": "otel", "to": "datadog", "label": "datadog exporter", "fromSide": "left", "toSide": "top" },
+    { "id": "fleet", "from": "ddagent", "to": "datadog", "label": "gauge", "fromSide": "bottom", "toSide": "right" },
+    { "id": "query", "from": "ddagent", "to": "mongo", "label": "custom query", "variant": "security", "fromSide": "left", "toSide": "top" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Đường dữ liệu chính",
+      "items": [
+        "Mỗi tick 5s đi qua MQTT rồi được batch vào time series",
+        "Change stream đẩy thẳng tới console và tới cửa sổ trượt của ai-agent"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Vòng xử lý khép kín",
+      "items": [
+        "ai-agent phân loại, chặn bằng policy gate, rồi phát lệnh MQTT",
+        "Thiết bị ACK, hồi phục được xác nhận, incident tự đóng"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Quan sát qua Datadog",
+      "items": [
+        "Một collector duy nhất ship traces, metrics, logs sang Datadog (không SDK riêng)",
+        "datadog-agent đọc MongoDB độc lập nên monitor vẫn thấy fleet khi app chết",
+        "zero-fill cả 3 trạng thái để monitor tự clear"
+      ]
+    }
+  ]
+}

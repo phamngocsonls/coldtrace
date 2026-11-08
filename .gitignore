@@ -1,0 +1,12 @@
+.env
+bin/
+*.log
+.DS_Store
+
+fleet-simulator
+initdb
+
+# Ops console (Next.js on Bun)
+ops-console/node_modules/
+ops-console/.next/
+.superpowers
