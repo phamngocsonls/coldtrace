@@ -492,7 +492,10 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
 <!-- ============================ 9. RESULTS ============================ -->
 <section class="slide">
   <div class="eyebrow"><span class="dot"></span><span>08 · Kết quả đo được</span></div>
-  <h2>Con số đo trên hệ thống chạy thật</h2>
+  <h2>Đo thật trên stack mô phỏng — không phải ước lượng</h2>
+  <div class="card" style="margin-bottom:.5em;border-color:rgba(245,165,36,.35)">
+    <div class="l"><strong class="amber">Điều kiện:</strong> 12 tủ đông là <strong>simulator vật lý</strong> (thermostat, chu kỳ compressor, defrost, cửa) chạy trong Docker — không phải tủ thật. Toàn bộ số dưới đây là <strong>đo trực tiếp</strong> từ stack đó: đúng data path, đúng MQTT, đúng MongoDB, đúng Datadog mà một tủ thật sẽ đi qua.</div>
+  </div>
   <div class="slide-body">
     <div class="stats">
       <div class="stat"><div class="v green">148–255s</div><div class="n">phát hiện sự cố<br>fault → incident</div></div>
@@ -524,7 +527,7 @@ blockquote{border-left:3px solid var(--green);padding-left:1em;color:var(--muted
           <li>Phát hiện <em>trước</em> ngưỡng ALARM -10 °C, không phải sau khi hàng hỏng</li>
           <li>Vòng lặp khép kín — không cần click để đóng incident</li>
         </ul>
-        <p class="note" style="margin-top:.5em">Toàn bộ số liệu thu từ hệ thống <strong>mô phỏng vật lý</strong>; ghi rõ để giám khảo đánh giá đúng.</p>
+        <p class="note" style="margin-top:.5em">Số liệu thu từ simulator vật lý — cùng đường dữ liệu mà tủ thật sẽ đi qua.</p>
       </div>
     </div>
   </div>
